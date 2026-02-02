@@ -12,6 +12,11 @@ export const env = {
   TWITCH_CLIENT_SECRET: process.env.TWITCH_CLIENT_SECRET || '',
   TWITCH_REDIRECT_URI: process.env.TWITCH_REDIRECT_URI || 'http://localhost:3000/auth/callback',
 
+  // Instagram
+  INSTAGRAM_APP_ID: process.env.INSTAGRAM_APP_ID || '',
+  INSTAGRAM_APP_SECRET: process.env.INSTAGRAM_APP_SECRET || '',
+  INSTAGRAM_REDIRECT_URI: process.env.INSTAGRAM_REDIRECT_URI || 'http://localhost:8787/api/platforms/instagram/callback',
+
   // OpenAI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
 

@@ -1,3 +1,71 @@
+## Completed: Instagram Graph API Integration
+
+### Created Files:
+1. **server/src/lib/instagram.ts**
+   - Implemented Instagram Graph API client library
+   - OAuth functions: getAuthorizationUrl, exchangeCodeForTokens, getLongLivedToken, refreshLongLivedToken, validateToken
+   - getInstagramBusinessAccount to retrieve IG Business Account from Facebook Pages
+   - InstagramClient class with methods for:
+     - User info retrieval
+     - Media container creation for Reels
+     - Media publishing
+     - Upload flow with polling for processing status
+   - Full TypeScript types for all API responses
+
+2. **server/src/routes/platforms.ts**
+   - Platform OAuth routes for Instagram
+   - GET /api/platforms/instagram/connect - initiates OAuth flow
+   - GET /api/platforms/instagram/callback - handles OAuth callback with postMessage to frontend
+   - POST /api/platforms/instagram/save - stores connection in user metadata
+   - GET /api/platforms/connections - retrieves all platform connection statuses
+   - DELETE /api/platforms/instagram/disconnect - removes Instagram connection
+   - POST /api/platforms/instagram/refresh-token - refreshes long-lived access token
+
+3. **server/migrations/002_add_instagram_support.sql**
+   - Added instagram_media_id column to clips table
+   - Created index for Instagram media ID lookups
+
+### Modified Files:
+1. **server/src/lib/env.ts**
+   - Added INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, INSTAGRAM_REDIRECT_URI environment variables
+
+2. **server/src/index.ts**
+   - Registered platformsRoutes at /api/platforms
+
+3. **server/src/routes/clips.ts**
+   - Updated bulk export endpoint to handle Instagram uploads
+   - Added InstagramClient integration for Reels upload
+   - Generates 24-hour signed URLs for Instagram video access
+   - Polls for container processing completion
+   - Updates clips with instagram_media_id on successful upload
+   - Returns detailed error information for failed uploads
+   - Added optional caption and shareToFeed parameters
+
+### Features Implemented:
+- Complete Instagram OAuth 2.0 flow with Facebook
+- Long-lived access token management (60-day expiry)
+- Token refresh functionality
+- Instagram Business Account linking
+- Reels upload with two-step process (container creation + publishing)
+- Status polling for async video processing
+- Signed URL generation for video access
+- Error handling for all API calls
+- User metadata storage for platform connections
+
+### Technical Details:
+- Uses Facebook Graph API v18.0 for OAuth
+- Uses Instagram Graph API v18.0 for Reels publishing
+- Long-lived tokens stored in Supabase user metadata
+- OAuth callback uses postMessage for secure frontend communication
+- Complete two-step Reels upload flow:
+  1. Create media container with video URL
+  2. Poll for FINISHED status
+  3. Publish media container
+  4. Retrieve permalink
+- Supports custom captions and feed sharing options
+- 24-hour signed URLs for Instagram video downloads
+- Error tracking per clip in bulk exports
+
 ## Completed: Pipeline Download Stage Implementation
 
 ### Created Files:
