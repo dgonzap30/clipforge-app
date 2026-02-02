@@ -1,0 +1,20 @@
+## Slim down src/store/index.ts
+
+Successfully removed Clip and QueueItem types and server state arrays from src/store/index.ts.
+
+Changes made:
+- Removed Clip interface (lines 5-22)
+- Removed QueueItem interface (lines 24-34)
+- Removed clips array from AppState
+- Removed queue array from AppState
+- Removed clip-related actions: addClip, updateClip, removeClip
+- Removed queue-related actions: addToQueue, updateQueueItem, removeFromQueue
+- Kept Settings type and UI-only state (user object)
+- Kept only setUser and updateSettings actions
+
+The store now contains only:
+- Settings type with detection and output configuration
+- UI-only user state (id and platform connection status)
+- Two actions: setUser and updateSettings
+
+File reduced from 147 lines to 78 lines.
