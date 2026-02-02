@@ -1,0 +1,46 @@
+## Supabase Auth Migration - useAuth Hook
+
+### Completed Changes:
+
+1. **Installed @supabase/supabase-js dependency**
+   - Added @supabase/supabase-js (v2.93.3) to project dependencies
+
+2. **Created Supabase client configuration**
+   - Created src/lib/supabase.ts with Supabase client initialization
+   - Configured auth settings with autoRefreshToken, persistSession, and detectSessionInUrl
+   - Added environment variable validation for VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+
+3. **Rewrote src/hooks/useAuth.ts to use Supabase Auth**
+   - Replaced api.auth.getMe() with supabase.auth.getSession()
+   - Implemented supabase.auth.signInWithOAuth() for Twitch login with redirectTo option
+   - Implemented supabase.auth.signOut() for logout
+   - Added supabase.auth.onAuthStateChange() listener with proper cleanup
+   - Updated session handling to extract Twitch user ID from user_metadata.provider_id
+   - Maintained existing API interface (user, loading, error, isAuthenticated, login, logout, refresh)
+
+4. **Removed api.auth dependency from src/lib/api.ts**
+   - Removed auth object with getLoginUrl, getMe, and logout methods
+   - Removed auth from api exports
+
+5. **Added comprehensive test coverage**
+   - Installed testing dependencies: vitest, @testing-library/react, @testing-library/jest-dom, jsdom, @vitest/ui
+   - Created vitest.config.ts and test setup file (src/test/setup.ts)
+   - Created src/hooks/useAuth.test.ts with 11 passing tests covering:
+     * Initialization and auth check on mount
+     * Auth state change listener setup and cleanup
+     * Login with Twitch OAuth
+     * Login error handling
+     * Logout functionality
+     * Logout error handling
+     * Valid session handling
+     * Null session handling
+     * Session error handling
+     * Refresh/re-authentication
+   - Added test scripts to package.json: test, test:ui, test:run
+
+### Notes:
+- The hook now uses Supabase Auth instead of the custom backend auth API
+- All existing functionality is preserved with the new implementation
+- Error handling has been improved with proper error state management
+- The onAuthStateChange listener ensures real-time auth state updates
+- Tests verify all core functionality works correctly

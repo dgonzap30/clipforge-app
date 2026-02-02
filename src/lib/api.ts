@@ -44,26 +44,6 @@ async function request<T>(
   return response.json()
 }
 
-// Auth API
-export const auth = {
-  getLoginUrl: () => `${API_BASE}/api/auth/login`,
-  
-  getMe: () => request<{
-    user: {
-      id: string
-      login: string
-      display_name: string
-      profile_image_url: string
-      email?: string
-    } | null
-    authenticated: boolean
-  }>('/api/auth/me'),
-  
-  logout: () => request<{ success: boolean }>('/api/auth/logout', { 
-    method: 'POST' 
-  }),
-}
-
 // VODs API
 export interface VOD {
   id: string
@@ -242,7 +222,6 @@ export const health = () => request<{ status: string }>('/health')
 
 // Export all
 export const api = {
-  auth,
   vods,
   jobs,
   clips,
