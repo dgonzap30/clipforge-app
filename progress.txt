@@ -1,0 +1,38 @@
+## LoadingSpinner Component Implementation
+
+### Completed:
+- Created `src/components/ui/LoadingSpinner.tsx` with the following features:
+  - Reusable loading spinner component
+  - Optional size prop with 4 variants: 'sm', 'md', 'lg', 'xl'
+  - Default size is 'md'
+  - Accessible with ARIA attributes (role="status", aria-label, sr-only text)
+  - Uses project's brand color (forge-500) for consistency
+  - Follows existing component patterns (cn utility, TypeScript interface)
+  - Supports custom className for additional styling flexibility
+  - Smooth spinning animation using Tailwind's animate-spin
+
+- Created example file `src/components/ui/LoadingSpinner.example.tsx`:
+  - Demonstrates all size variants
+  - Shows custom className usage
+  - Provides centered container example
+
+### Technical Details:
+- Component uses Tailwind CSS for styling
+- Leverages the cn() utility function for className merging
+- Properly typed with TypeScript
+- Verified successful compilation with `npm run build`
+- No external dependencies beyond existing project setup
+
+### Usage:
+```tsx
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+
+// Default medium size
+<LoadingSpinner />
+
+// Custom size
+<LoadingSpinner size="lg" />
+
+// With custom styling
+<LoadingSpinner size="sm" className="text-blue-500" />
+```
