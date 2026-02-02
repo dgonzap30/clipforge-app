@@ -1,14 +1,12 @@
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { ProcessingJob } from '@/lib/api'
 
-// Placeholder data
-const processingItems = [
-  { id: '1', title: 'Late Night Stream', progress: 67 },
-  { id: '2', title: 'Ranked Grind', progress: 23 },
-  { id: '3', title: 'Just Chatting', progress: 0 },
-]
+interface ProcessingQueueProps {
+  jobs: ProcessingJob[]
+}
 
-export function ProcessingQueue() {
+export function ProcessingQueue({ jobs }: ProcessingQueueProps) {
   return (
     <div className="card">
       <div className="p-4 border-b border-dark-800 flex items-center justify-between">
@@ -19,29 +17,29 @@ export function ProcessingQueue() {
       </div>
       
       <div className="p-4 space-y-4">
-        {processingItems.map((item) => (
-          <div key={item.id} className="space-y-2">
+        {jobs.map((job) => (
+          <div key={job.id} className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                {item.progress > 0 ? (
+                {job.progress > 0 ? (
                   <Loader2 className="w-4 h-4 text-forge-400 animate-spin" />
                 ) : (
                   <div className="w-4 h-4 rounded-full border-2 border-dark-600" />
                 )}
-                <span className="text-sm font-medium truncate">{item.title}</span>
+                <span className="text-sm font-medium truncate">{job.title}</span>
               </div>
-              <span className="text-sm text-dark-400">{item.progress}%</span>
+              <span className="text-sm text-dark-400">{job.progress}%</span>
             </div>
             <div className="h-1.5 bg-dark-800 rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-forge-500 transition-all duration-300"
-                style={{ width: `${item.progress}%` }}
+                style={{ width: `${job.progress}%` }}
               />
             </div>
           </div>
         ))}
-        
-        {processingItems.length === 0 && (
+
+        {jobs.length === 0 && (
           <p className="text-sm text-dark-500 text-center py-4">
             No streams processing
           </p>
