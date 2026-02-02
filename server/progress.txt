@@ -48,3 +48,83 @@
 - Graceful error handling with proper exit code checking
 - TypeScript types for all interfaces and functions
 - Test coverage with temporary directories for isolation
+
+## Completed: Auto-Zoom Effects Stage with Face-Aware Zooming
+
+### Created Files:
+1. **server/src/pipeline/stages/effects.ts**
+   - Implemented effectsStage implementing PipelineStage interface
+   - Auto-zoom effect triggered by audio peak moments (type: 'peak' or 'sustained')
+   - Face-aware zooming when face tracking data is available
+   - Configurable zoom intensity: 'subtle' (1.2x), 'medium' (1.3x), 'strong' (1.5x)
+   - Built FFmpeg zoompan filter with dynamic zoom and pan expressions
+   - Smooth zoom transitions: zoom in (0.5s) → hold (1.0s) → zoom out (0.5s)
+   - Filters audio moments to only process moments within each clip's time range
+   - Falls back to center zoom when no face tracking data available
+
+2. **server/src/pipeline/stages/effects.test.ts**
+   - Comprehensive test suite with 24 tests covering:
+     - Stage name and validation
+     - Error handling for missing reframedClipsDir and reframedClips
+     - Auto-zoom enable/disable behavior
+     - Zoom intensity mapping (subtle/medium/strong)
+     - Moment filtering by clip time range
+     - Zoom keyframe generation with correct timing
+     - Face position interpolation between keyframes
+     - FFmpeg zoompan filter expression building
+     - Face-aware pan offset calculations
+     - Center pan fallback when no face data
+     - Progress tracking and metadata preservation
+   - All tests pass successfully
+
+3. **Modified: server/src/pipeline/orchestrator.ts**
+   - Added import for effectsStage
+   - Inserted effectsStage between reframeStage and captionStageWrapper in PIPELINE_STAGES array
+   - Added 'effects': 'processing' mapping to STAGE_TO_STATUS
+   - Updated captionStageWrapper to use effectsClips if available, falling back to reframedClips
+
+4. **Modified: server/src/pipeline/types.ts**
+   - Added effectsClips field to PipelineContext (Array<{ path, originalPath, clipId }>)
+   - Added effectsClipsDir field to PipelineContext for effects output directory
+
+### Features Implemented:
+- Auto-zoom on audio peaks with configurable intensity
+- Face-aware zooming that pans toward detected faces during zoom
+- Smooth zoom transitions using FFmpeg's zoompan filter
+- Linear interpolation for zoom factor and face position
+- Clip-relative timestamp conversion for accurate moment timing
+- Graceful fallback when auto-zoom is disabled or no moments detected
+- Integration with existing audio analysis pipeline
+- Support for face tracking data from reframe stage
+
+### Technical Details:
+- Uses FFmpeg's zoompan filter for hardware-accelerated zoom effects
+- Builds complex filter expressions with nested if statements for interpolation
+- Normalizes face positions to 0.0-1.0 range for resolution-independent panning
+- Filters moments by clip start time and duration for accurate sync
+- Generates 4 keyframes per zoom moment (start, peak, hold-end, end)
+- Sorts and manages keyframes chronologically
+- Interpolates face positions between keyframes using linear interpolation
+- Preserves clip metadata (originalPath, clipId) through the pipeline
+- Updates progress to 70% (positioned between reframe at 60% and caption at 80%)
+
+### Zoom Behavior:
+- Triggers on audio moments with type 'peak' or 'sustained'
+- Zoom sequence: 1.0x → maxZoom over 0.5s → hold 1.0s → 1.0x over 0.5s
+- Center pan formula: x = iw/2-(iw/zoom/2), y = ih/2-(ih/zoom/2)
+- Face-aware pan: x = iw/2-(iw/zoom/2)+(faceX-0.5)*iw/zoom
+- Face position interpolated between tracking keyframes for smooth motion
+
+### Integration:
+- Seamlessly integrates into existing pipeline between reframe and caption stages
+- Respects job settings: autoZoom boolean and zoomIntensity string
+- Passes effectsClips to caption stage for final processing
+- Creates /effects/ directory parallel to /reframed/ directory
+- Handles clips without audio moments by copying unchanged
+
+### Test Coverage:
+- All 24 tests pass
+- Zero linting errors or warnings
+- Tests validate structure, behavior, and edge cases
+- Includes mathematical validation of interpolation formulas
+- Tests both face-aware and center-only zoom behaviors

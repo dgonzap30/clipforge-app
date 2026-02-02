@@ -11,6 +11,7 @@ import { createDownloadStage } from './stages/download'
 import { analyze } from './stages/analyze'
 import { createExtractStage } from './stages/extract'
 import { reframeStage } from './stages/reframe'
+import { effectsStage } from './stages/effects'
 import { captionStage } from './stages/caption'
 import { createUploadStage } from './stages/upload'
 import path from 'path'
@@ -43,8 +44,9 @@ const analyzeStageWrapper: PipelineStage = {
 const captionStageWrapper: PipelineStage = {
   name: 'caption',
   async execute(context: PipelineContext): Promise<PipelineContext> {
-    const clips = context.reframedClips || []
-    const outputDir = context.reframedClipsDir || context.workDir
+    // Use effects clips if available, otherwise fall back to reframed clips
+    const clips = context.effectsClips || context.reframedClips || []
+    const outputDir = context.effectsClipsDir || context.reframedClipsDir || context.workDir
     const captionedClips = []
 
     for (const clip of clips) {
@@ -73,6 +75,7 @@ const PIPELINE_STAGES: PipelineStage[] = [
   analyzeStageWrapper,
   createExtractStage(),
   reframeStage,
+  effectsStage,
   captionStageWrapper,
   createUploadStage(),
 ]
@@ -83,6 +86,7 @@ const STAGE_TO_STATUS: Record<string, JobStatus> = {
   'analyze': 'analyzing',
   'extract': 'extracting',
   'reframe': 'reframing',
+  'effects': 'processing',
   'caption': 'captioning',
   'upload': 'completed',
 }

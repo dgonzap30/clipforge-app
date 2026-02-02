@@ -39,6 +39,8 @@ export interface PipelineContext {
   extractedClipsDir?: string
   reframedClips?: Array<{ path: string; originalPath: string; clipId?: string }>
   reframedClipsDir?: string
+  effectsClips?: Array<{ path: string; originalPath: string; clipId?: string }>
+  effectsClipsDir?: string
   captionedClips?: Array<{ path: string; originalPath: string; clipId?: string }>
   uploadedClips?: Array<{
     clipId: string
