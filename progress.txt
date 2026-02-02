@@ -1,0 +1,55 @@
+## Queue Infrastructure Implementation
+
+### Completed Tasks
+
+1. Created `server/src/queue/connection.ts`:
+   - Configured Redis connection using ioredis
+   - Uses REDIS_URL from environment variables (server/src/lib/env.ts:18)
+   - Set maxRetriesPerRequest to null (required for BullMQ)
+   - Added connection event handlers for error logging and connection status
+   - Implemented graceful shutdown handlers for SIGTERM and SIGINT
+
+2. Created `server/src/queue/processingQueue.ts`:
+   - Implemented BullMQ Queue named 'vod-processing'
+   - Uses Redis connection from connection.ts
+   - Defined VodProcessingJobData interface for type-safe job data
+   - Configured default job options:
+     * 3 retry attempts
+     * Exponential backoff with 5s initial delay
+     * Automatic cleanup: keeps completed jobs for 1 hour (max 100), failed jobs for 24 hours
+   - Added queue event listeners for monitoring (waiting, active, completed, failed)
+   - Implemented graceful shutdown handlers
+
+3. Created comprehensive test suite `server/src/queue/__tests__/processingQueue.test.ts`:
+   - Tests queue initialization and naming
+   - Tests adding jobs to the queue
+   - Verifies default job options (attempts, backoff)
+   - Tests job retrieval by ID
+   - Tests waiting jobs count
+   - Tests job removal
+   - All 6 tests passing
+
+### Implementation Details
+
+The processing queue is now ready to be integrated with the job routes in `server/src/routes/jobs.ts`.
+The TODO comments at lines 133-134, 198, and 223 can now be implemented using:
+
+```typescript
+import { processingQueue } from '../queue/processingQueue.js'
+
+// Add job to queue
+await processingQueue.add('process-vod', {
+  jobId: job.id,
+  vodId: data.vodId,
+  vodUrl: data.vodUrl,
+  title: data.title,
+  channelLogin: data.channelLogin,
+  duration: data.duration,
+  settings: job.settings,
+})
+```
+
+### Files Created
+- server/src/queue/connection.ts
+- server/src/queue/processingQueue.ts
+- server/src/queue/__tests__/processingQueue.test.ts
