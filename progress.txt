@@ -1,0 +1,48 @@
+## Created server/src/pipeline/types.ts
+
+### What was implemented:
+
+1. **PipelineContext Interface**
+   - Comprehensive context object that flows through all pipeline stages
+   - Contains job identification (jobId, userId, vodId, vodUrl)
+   - VOD metadata (title, channel, duration, timestamps)
+   - Processing settings from job configuration
+   - File paths for intermediate artifacts (work dirs, downloaded files, clips)
+   - Results accumulator for each stage (download, analyze, extract, reframe, caption, upload)
+   - Progress tracking with stage-level and overall progress
+   - Error handling with per-stage error tracking
+   - Timestamps for job lifecycle
+
+2. **PipelineStage Interface**
+   - Base interface for all pipeline stages
+   - `name` and `description` for identification
+   - `execute()` method that processes context and returns updated context
+   - Optional `canExecute()` for pre-execution validation
+   - Optional `cleanup()` for resource cleanup on failure
+   - Optional `retryConfig` for retry behavior configuration
+
+3. **Supporting Types**
+   - `PipelineStageResult`: Return type for stage execution
+   - `PipelineConfig`: Configuration for the entire pipeline
+   - `ProgressCallback`: Type for progress reporting
+   - `ContextUpdate`: Helper type for partial context updates
+   - `StageStatus`: Enum for stage execution states
+   - `StageExecution`: Record type for tracking stage execution
+
+### Design Decisions:
+
+- Context is immutable between stages - each stage returns a new context
+- Results are accumulated in a structured way per stage
+- Error tracking is non-fatal by default (allows partial recovery)
+- Progress tracking at both stage and overall level
+- File paths are organized by stage (workDir, vodFile, audioFile, etc.)
+- Supports skipping stages based on settings (e.g., chatAnalysis disabled)
+- Retry configuration is per-stage to allow fine-grained control
+- Cleanup is configurable for both success and failure scenarios
+
+### Integration Points:
+
+- Imports existing types: `SignalMoment`, `ExtractedClip`, `AudioMoment`, `ChatMoment`
+- Aligns with job settings from `server/src/routes/jobs.ts`
+- Designed to work with BullMQ job queue (next stages)
+- Ready for Supabase integration for progress updates and file storage
