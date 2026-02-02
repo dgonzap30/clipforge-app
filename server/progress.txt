@@ -1,0 +1,50 @@
+## Completed: Pipeline Download Stage Implementation
+
+### Created Files:
+1. **server/src/pipeline/types.ts**
+   - Defined PipelineContext interface with job metadata, file paths, and progress tracking
+   - Defined PipelineStage interface with execute, validate, and cleanup methods
+   - Added ProgressCallback, DownloadProgress, and StageProgress types
+
+2. **server/src/pipeline/stages/download.ts**
+   - Implemented DownloadStage class implementing PipelineStage interface
+   - Integrated yt-dlp for VOD downloads with Bun.spawn for process management
+   - Built progress parser that extracts percent, bytes, speed, and ETA from yt-dlp output
+   - Added validation to check yt-dlp availability
+   - Implemented cleanup handler for downloaded files
+   - Created factory function createDownloadStage() and standalone downloadVod() helper
+   - Progress callback support for real-time download tracking
+   - Support for format selection and max file size limiting
+
+3. **server/src/pipeline/stages/download.test.ts**
+   - Comprehensive test suite with 14 tests covering:
+     - Stage name and validation
+     - Error handling for missing vodUrl and workDir
+     - Progress parsing from yt-dlp output
+     - Byte calculation from different size units (GiB, MiB, KiB)
+     - Progress callback tracking
+     - Factory function creation
+     - Cleanup handling
+     - Context updates with downloaded path
+     - File finding logic
+     - Progress percent capping at 99
+   - All tests pass successfully
+
+### Features Implemented:
+- yt-dlp integration with real-time progress parsing
+- Regex-based parsing of download progress (percent, speed, ETA, bytes)
+- Stream-based output reading using Bun.spawn for efficiency
+- Error handling with detailed error messages from stderr
+- File detection for multiple output scenarios (direct download, merge, already downloaded)
+- Cleanup capability for temporary files
+- Validation of required tools and inputs
+- Factory pattern for easy stage instantiation
+- Standalone function for testing downloads outside pipeline
+
+### Technical Details:
+- Uses Bun.spawn for subprocess management instead of simple $ shell commands
+- Parses yt-dlp output line-by-line to track progress in real-time
+- Handles multiple file naming scenarios (destination, merge, already downloaded)
+- Graceful error handling with proper exit code checking
+- TypeScript types for all interfaces and functions
+- Test coverage with temporary directories for isolation
