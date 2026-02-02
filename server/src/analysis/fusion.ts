@@ -19,6 +19,12 @@ export interface SignalMoment {
     clips?: { score: number; count: number }
   }
   suggestedTitle?: string
+  hookScore?: number // 0-100, quality of the opening hook (added post-transcription)
+  boundaryOptimization?: {
+    adjustedStart: number
+    adjustedEnd: number
+    reason: string
+  }
 }
 
 export interface FusionConfig {
