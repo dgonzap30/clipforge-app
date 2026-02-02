@@ -1,0 +1,36 @@
+Task: Create src/components/ui/EmptyState.tsx
+
+Completed:
+- Created EmptyState.tsx component with the following features:
+  - Accepts icon prop (LucideIcon type) for visual representation
+  - Displays title and description text
+  - Optional action button with customizable label and onClick handler
+  - Follows existing project patterns (uses cn utility, Tailwind classes)
+  - Matches design system (dark theme colors, card-like styling)
+  - Responsive and accessible design
+  - Optional className prop for custom styling
+
+Component API:
+- icon: LucideIcon (required) - Icon component from lucide-react
+- title: string (required) - Main heading text
+- description: string (required) - Descriptive text below title
+- action: { label: string, onClick: () => void } (optional) - Action button
+- className: string (optional) - Additional CSS classes
+
+Usage example:
+import { FileX } from 'lucide-react'
+import { EmptyState } from '@/components/ui/EmptyState'
+
+<EmptyState
+  icon={FileX}
+  title="No clips found"
+  description="You haven't created any clips yet. Start by connecting your streaming account."
+  action={{
+    label: "Connect Account",
+    onClick: () => navigate('/connect')
+  }}
+/>
+
+Notes:
+- No test framework is currently configured in the project, so tests were not written
+- Component is ready to use in pages like Clips, Queue, or Dashboard when data is empty
