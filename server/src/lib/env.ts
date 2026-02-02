@@ -12,6 +12,11 @@ export const env = {
   TWITCH_CLIENT_SECRET: process.env.TWITCH_CLIENT_SECRET || '',
   TWITCH_REDIRECT_URI: process.env.TWITCH_REDIRECT_URI || 'http://localhost:3000/auth/callback',
 
+  // TikTok
+  TIKTOK_CLIENT_KEY: process.env.TIKTOK_CLIENT_KEY || '',
+  TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
+  TIKTOK_REDIRECT_URI: process.env.TIKTOK_REDIRECT_URI || 'http://localhost:3000/api/platforms/tiktok/callback',
+
   // OpenAI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
 
