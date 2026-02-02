@@ -1,0 +1,54 @@
+# Progress Log
+
+## Extract Pipeline Stage Implementation
+
+### Completed Tasks:
+1. Created `server/src/pipeline/types.ts`:
+   - Defined PipelineContext interface with all required fields (jobId, userId, vodId, vodUrl, vodPath, outputDir, moments, extractedClips, metadata)
+   - Defined PipelineStage interface with name and execute method
+   - Defined StageProgress interface for tracking pipeline progress
+
+2. Created `server/src/pipeline/stages/extract.ts`:
+   - Implemented ExtractStage class that wraps clipper.ts extractClipsBatch
+   - Validates required context fields (vodPath, moments, outputDir)
+   - Calls extractClipsBatch with configurable options (maxConcurrent, quality, onProgress)
+   - Creates clip records in Supabase database with all required fields:
+     - id, job_id, user_id, vod_id
+     - title (from suggestedTitle or 'Untitled Clip')
+     - start_time, end_time, duration
+     - status ('processing')
+     - hyde_score, confidence
+     - signals (chat, audio, clips)
+     - video_path, thumbnail_path
+     - created_at, updated_at
+   - Returns updated PipelineContext with extractedClips
+   - Includes initializeSupabaseClient function for dependency injection
+   - Gracefully handles missing Supabase client for testing
+
+3. Created `server/src/pipeline/stages/extract.test.ts`:
+   - Tests for correct stage name
+   - Tests for required context validation (vodPath, moments, outputDir)
+   - Tests successful clip extraction and database record creation
+   - Tests progress callback functionality
+   - Tests custom quality settings
+   - Tests operation without Supabase client (for isolated testing)
+   - Uses Bun test framework with mocking
+
+### Implementation Notes:
+- The stage implements the PipelineStage interface for consistency with pipeline orchestrator
+- Supabase client is injected via initializeSupabaseClient for better testability
+- The stage can operate without Supabase for testing/development purposes
+- Database schema matches expected Supabase clips table structure
+- Error handling for missing required context fields
+- Configurable extraction options (quality, concurrency, progress tracking)
+
+### Dependencies:
+- ../types (PipelineContext, PipelineStage)
+- ../../extraction/clipper (extractClipsBatch, ExtractedClip)
+- nanoid (for generating IDs)
+- Supabase client (injected, optional for testing)
+
+### Next Steps:
+- When server/src/lib/supabase.ts is created, update import to use actual Supabase client
+- The stage is ready to be integrated into the pipeline orchestrator
+- File paths (video_path, thumbnail_path) will be updated by the upload stage with final Supabase Storage URLs
