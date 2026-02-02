@@ -1,0 +1,56 @@
+# Progress Log
+
+## Task: Rewrite server/src/routes/auth.ts - Replace Cookie-based Twitch OAuth with Supabase Auth
+
+### Completed Changes:
+
+1. **Installed Dependencies**
+   - Added `@supabase/supabase-js@2.93.3` to server package.json
+
+2. **Created Supabase Client Configuration** (server/src/lib/supabase.ts)
+   - Set up Supabase client using service role key for server-side operations
+   - Created `verifySupabaseToken()` helper function that uses `supabase.auth.getUser(token)` to verify JWT tokens
+   - Configured client with `autoRefreshToken: false` and `persistSession: false` for server-side usage
+
+3. **Updated Environment Configuration** (server/src/lib/env.ts)
+   - Added `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` environment variables
+   - Updated validation to require Supabase credentials instead of Twitch OAuth credentials
+   - Updated server/.env.example with Supabase configuration instructions
+
+4. **Created JWT Verification Middleware** (server/src/middleware/auth.ts)
+   - Implemented `authMiddleware()` for required authentication
+   - Implemented `optionalAuthMiddleware()` for optional authentication
+   - Middleware extracts Bearer token from Authorization header and verifies it using Supabase
+   - Extends Hono context to include user object for downstream route handlers
+
+5. **Rewrote Auth Routes** (server/src/routes/auth.ts)
+   - **Removed**: All cookie-based Twitch OAuth code (login, callback, logout endpoints)
+   - **Removed**: Cookie dependencies (setCookie, getCookie)
+   - **Removed**: Twitch client dependencies
+   - **Kept**: `/api/auth/me` endpoint as specified
+   - **Updated**: `/api/auth/me` now expects `Authorization: Bearer <token>` header instead of cookies
+   - **Updated**: Returns user data from `supabase.auth.getUser(token)` including id, email, user_metadata, app_metadata, and created_at
+   - **Added**: `/api/auth/health` endpoint for service health checks
+
+6. **Added Comprehensive Tests** (server/src/routes/__tests__/auth.test.ts)
+   - Test for missing Authorization header (returns unauthenticated)
+   - Test for malformed Authorization header (returns unauthenticated)
+   - Test for invalid token (returns unauthenticated)
+   - Test for valid token (returns user data)
+   - Test for verification errors (handles gracefully)
+   - Test for health check endpoint
+   - All 6 tests passing
+
+### Technical Implementation Details:
+
+- **Authentication Flow**: Frontend handles Supabase Auth (sign in/sign up), receives JWT token, sends token in Authorization header for API requests
+- **Token Verification**: Server verifies JWT using Supabase's `getUser()` API, which validates the token and returns user data
+- **No Session Storage**: Server is now stateless - no cookies, no session storage, just JWT verification on each request
+- **Middleware Available**: Created reusable auth middleware for protecting other routes if needed
+
+### Migration Notes:
+
+- Frontend will need to handle Supabase Auth UI/flow instead of redirecting to `/api/auth/login`
+- Frontend must include `Authorization: Bearer <token>` header in all authenticated requests
+- No more cookies - all authentication is via JWT tokens
+- Logout is now client-side only (clear token from client storage)
