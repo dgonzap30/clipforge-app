@@ -17,6 +17,11 @@ export const env = {
   INSTAGRAM_APP_SECRET: process.env.INSTAGRAM_APP_SECRET || '',
   INSTAGRAM_REDIRECT_URI: process.env.INSTAGRAM_REDIRECT_URI || 'http://localhost:8787/api/platforms/instagram/callback',
 
+  // TikTok
+  TIKTOK_CLIENT_KEY: process.env.TIKTOK_CLIENT_KEY || '',
+  TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
+  TIKTOK_REDIRECT_URI: process.env.TIKTOK_REDIRECT_URI || 'http://localhost:3000/api/platforms/tiktok/callback',
+
   // OpenAI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
 

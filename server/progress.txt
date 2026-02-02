@@ -197,6 +197,115 @@
 - Includes mathematical validation of interpolation formulas
 - Tests both face-aware and center-only zoom behaviors
 
+## Completed: TikTok Content Posting API Integration
+
+### Created Files:
+1. **server/src/lib/tiktok.ts**
+   - Implemented TikTok OAuth 2.0 flow with authorization URL generation
+   - Created TikTokClient class with methods for:
+     - User info fetching
+     - Video upload via Direct Post API (2-step process: init, upload, confirm)
+     - Publish status checking
+   - Token exchange and refresh functionality
+   - Token validation support
+   - Helper methods for file size and Blob conversion
+
+2. **server/src/routes/platforms.ts**
+   - Created RESTful routes for platform connections management:
+     - GET /api/platforms/connections - fetch all platform connections
+     - GET /api/platforms/tiktok/connect - initiate TikTok OAuth flow
+     - GET /api/platforms/tiktok/callback - handle OAuth callback
+     - POST /api/platforms/disconnect - disconnect a platform
+   - Implemented refreshTikTokToken() helper for automatic token refresh
+   - CSRF protection via state parameter in OAuth flow
+   - Row-level security integration with Supabase
+
+3. **server/migrations/002_create_platform_connections_table.sql**
+   - Created platform_connections table with:
+     - Support for tiktok, youtube, instagram platforms
+     - OAuth token storage (access_token, refresh_token, expiry)
+     - Account metadata storage (JSONB for flexibility)
+     - Unique constraint per user per platform
+     - Row-level security policies
+     - Proper indexes for query performance
+
+4. **server/src/lib/tiktok.test.ts**
+   - Comprehensive test suite with 13 tests covering:
+     - OAuth URL generation
+     - Token exchange success and failure scenarios
+     - Token refresh functionality
+     - Token validation
+     - User info fetching
+     - Publish status checking
+     - Error handling for API failures
+   - All tests pass successfully
+
+5. **server/src/routes/platforms.test.ts**
+   - Test suite for platform routes covering:
+     - Connection listing
+     - OAuth flow initiation
+     - Platform disconnection
+     - Error handling for invalid platforms
+     - Database error scenarios
+
+### Modified Files:
+1. **server/src/lib/env.ts**
+   - Added TikTok environment variables:
+     - TIKTOK_CLIENT_KEY
+     - TIKTOK_CLIENT_SECRET
+     - TIKTOK_REDIRECT_URI
+
+2. **server/src/index.ts**
+   - Registered platforms routes at /api/platforms
+   - Imported platformsRoutes module
+
+3. **server/src/routes/clips.ts**
+   - Updated bulk export endpoint to actually upload to TikTok
+   - Implemented full TikTok upload workflow:
+     - Fetch platform connection and tokens
+     - Handle token refresh if expired
+     - Download video from Supabase Storage
+     - Upload to TikTok via Direct Post API
+     - Update clip status and exported_to array
+     - Cleanup temporary files
+   - Added error handling with detailed error messages
+   - Returns both successful exports and errors
+
+### Features Implemented:
+- Complete TikTok OAuth 2.0 flow with authorization code grant
+- Secure token storage in database with automatic refresh
+- TikTok Direct Post API integration (3-step upload process)
+- Video file handling with temporary file management
+- Platform connection management (connect, disconnect, list)
+- Token expiry checking and automatic refresh
+- CSRF protection in OAuth flow
+- Comprehensive error handling throughout
+- Full test coverage for OAuth and API client
+
+### Technical Details:
+- Uses TikTok Content Posting API v2
+- Implements OAuth 2.0 with PKCE-like state protection
+- Stores encrypted tokens in Supabase with RLS policies
+- Handles token refresh automatically before API calls
+- Supports video upload with metadata (title, privacy, duet/stitch settings)
+- Cleans up temporary files after upload
+- Returns detailed error information for debugging
+- TypeScript types for all API responses and requests
+- Compatible with scheduled publishing (TikTok API feature)
+
+### Integration Points:
+- Works with existing Supabase Storage for video downloads
+- Integrates with clips bulk export endpoint
+- Uses existing auth middleware for user authentication
+- Follows existing error handling patterns
+- Maintains consistency with Twitch OAuth implementation
+
+### Testing:
+- 13 unit tests for TikTok client and OAuth functions
+- All tests passing with comprehensive coverage
+- Linting passes with no errors or warnings
+- Ready for integration testing with real TikTok credentials
+
 ## Completed: Chat Log Fetching and Chat Weight Restoration
 
 ### Modified Files:

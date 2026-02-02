@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { clips as clipsStorage } from '../lib/storage'
 import { requireAuth, type AuthContext } from '../middleware/auth'
 import { InstagramClient } from '../lib/instagram'
+import { TikTokClient } from '../lib/tiktok'
+import { refreshTikTokToken } from './platforms'
 
 export const clipsRoutes = new Hono<AuthContext>()
 
@@ -397,7 +399,7 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
   const { ids, platform, caption, shareToFeed } = c.req.valid('json')
 
   try {
-    // Fetch clips that are ready for export
+    // Fetch clips that are ready for export with their video paths
     const { data: clips, error: fetchError } = await supabase
       .from('clips')
       .select('id, title, status, exported_to, video_path')
@@ -410,37 +412,33 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
       return c.json({ error: 'Failed to fetch clips' }, 500)
     }
 
-    if (!clips || clips.length === 0) {
-      return c.json({ error: 'No clips found or clips not ready' }, 400)
-    }
-
     const exported: string[] = []
     const errors: Array<{ clipId: string; error: string }> = []
 
-    // Handle Instagram export
-    if (platform === 'instagram') {
-      // Get user's Instagram connection
-      const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id)
+    // Process each clip
+    for (const clip of clips || []) {
+      const exportedTo = clip.exported_to || []
 
-      if (userError || !user) {
-        return c.json({ error: 'Failed to get user data' }, 500)
+      // Skip if already exported to this platform
+      if (exportedTo.includes(platform)) {
+        continue
       }
 
-      const instagramData = user.user.user_metadata?.instagram
+      try {
+        // Handle Instagram export
+        if (platform === 'instagram') {
+          // Get user's Instagram connection
+          const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id)
 
-      if (!instagramData?.access_token || !instagramData?.ig_user_id) {
-        return c.json({ error: 'Instagram not connected. Please connect your Instagram account first.' }, 400)
-      }
+          if (userError || !user) {
+            errors.push({ clipId: clip.id, error: 'Failed to get user data' })
+            continue
+          }
 
-      // Create Instagram client
-      const igClient = new InstagramClient(instagramData.access_token, instagramData.ig_user_id)
+          const instagramData = user.user.user_metadata?.instagram
 
-      // Export each clip to Instagram
-      for (const clip of clips) {
-        try {
-          const exportedTo = clip.exported_to || []
-          if (exportedTo.includes('instagram')) {
-            // Skip if already exported to Instagram
+          if (!instagramData?.access_token || !instagramData?.ig_user_id) {
+            errors.push({ clipId: clip.id, error: 'Instagram not connected' })
             continue
           }
 
@@ -448,6 +446,9 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
             errors.push({ clipId: clip.id, error: 'Video not available' })
             continue
           }
+
+          // Create Instagram client
+          const igClient = new InstagramClient(instagramData.access_token, instagramData.ig_user_id)
 
           // Generate long-lived signed URL (24 hours) for Instagram
           const signedUrlResult = await clipsStorage.getSignedUrl(clip.video_path, 86400)
@@ -484,40 +485,102 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
             console.error('Error updating clip export status:', updateError)
             errors.push({ clipId: clip.id, error: 'Failed to update clip status' })
           }
-        } catch (err) {
-          console.error(`Error exporting clip ${clip.id} to Instagram:`, err)
-          const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-          errors.push({ clipId: clip.id, error: errorMessage })
-        }
-      }
-    } else {
-      // For TikTok and YouTube, just update status (not implemented yet)
-      for (const clip of clips) {
-        const exportedTo = clip.exported_to || []
-        if (!exportedTo.includes(platform)) {
-          exportedTo.push(platform)
-
-          const { error: updateError } = await supabase
-            .from('clips')
-            .update({
-              status: 'exported',
-              exported_to: exportedTo,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', clip.id)
+        } else if (platform === 'tiktok') {
+          // Get TikTok connection for user
+          const { data: connection, error: connError } = await supabase
+            .from('platform_connections')
+            .select('access_token, refresh_token, token_expires_at')
             .eq('user_id', user_id)
+            .eq('platform', 'tiktok')
+            .single()
 
-          if (!updateError) {
-            exported.push(clip.id)
-          } else {
-            console.error('Error updating clip export status:', updateError)
-            errors.push({ clipId: clip.id, error: 'Failed to update clip status' })
+          if (connError || !connection) {
+            errors.push({ clipId: clip.id, error: 'TikTok not connected' })
+            continue
           }
-        }
-      }
 
-      // TODO: Queue export jobs for TikTok and YouTube upload
+          // Check if token is expired and refresh if needed
+          let accessToken = connection.access_token
+          const expiresAt = new Date(connection.token_expires_at)
+
+          if (expiresAt < new Date()) {
+            const refreshedToken = await refreshTikTokToken(user_id)
+            if (!refreshedToken) {
+              errors.push({ clipId: clip.id, error: 'Failed to refresh TikTok token' })
+              continue
+            }
+            accessToken = refreshedToken
+          }
+
+          // Download video from storage
+          const videoBlob = await clipsStorage.download(clip.video_path)
+          if (!videoBlob) {
+            errors.push({ clipId: clip.id, error: 'Failed to download video' })
+            continue
+          }
+
+          // Save video to temporary file
+          const fs = await import('fs/promises')
+          const path = await import('path')
+          const os = await import('os')
+
+          const tmpDir = os.tmpdir()
+          const tmpFilePath = path.join(tmpDir, `${clip.id}.mp4`)
+
+          const buffer = await videoBlob.arrayBuffer()
+          await fs.writeFile(tmpFilePath, new Uint8Array(buffer))
+
+          try {
+            // Upload to TikTok
+            const tiktokClient = new TikTokClient(accessToken)
+            const publishId = await tiktokClient.uploadVideo({
+              videoPath: tmpFilePath,
+              title: clip.title,
+              videoDescription: clip.title,
+              privacyLevel: 'PUBLIC_TO_EVERYONE',
+            })
+
+            // Update clip record with TikTok publish ID
+            exportedTo.push(platform)
+
+            const { error: updateError } = await supabase
+              .from('clips')
+              .update({
+                status: 'exported',
+                exported_to: exportedTo,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', clip.id)
+              .eq('user_id', user_id)
+
+            if (!updateError) {
+              exported.push(clip.id)
+              console.log(`Successfully exported clip ${clip.id} to TikTok with publish ID: ${publishId}`)
+            } else {
+              console.error('Error updating clip export status:', updateError)
+              errors.push({ clipId: clip.id, error: 'Failed to update clip status' })
+            }
+          } finally {
+            // Clean up temporary file
+            try {
+              await fs.unlink(tmpFilePath)
+            } catch (unlinkError) {
+              console.error('Error deleting temporary file:', unlinkError)
+            }
+          }
+        } else {
+          // YouTube not implemented yet
+          errors.push({ clipId: clip.id, error: `${platform} export not implemented yet` })
+        }
+      } catch (clipError) {
+        console.error(`Error exporting clip ${clip.id} to ${platform}:`, clipError)
+        errors.push({
+          clipId: clip.id,
+          error: clipError instanceof Error ? clipError.message : 'Unknown error'
+        })
+      }
     }
+
 
     return c.json({
       exported,
