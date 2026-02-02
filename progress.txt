@@ -1,0 +1,60 @@
+# Jobs Route Rewrite - Supabase Integration
+
+## What was done:
+
+1. **Installed Supabase client library**
+   - Added @supabase/supabase-js to server dependencies
+
+2. **Created Supabase configuration**
+   - Created server/src/lib/supabase.ts with Supabase client initialization
+   - Updated server/src/lib/env.ts to include SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+   - Added validation for Supabase environment variables in production
+
+3. **Created database schema**
+   - Created server/migrations/001_create_jobs_table.sql with:
+     - jobs table with all necessary columns (snake_case naming)
+     - Indexes for common query patterns (user_id, status, created_at)
+     - Row Level Security (RLS) enabled
+     - RLS policy for user isolation
+
+4. **Created authentication middleware**
+   - Created server/src/middleware/auth.ts
+   - Middleware extracts Twitch user from access token
+   - Sets userId and userLogin in Hono context for downstream handlers
+   - Returns 401 for unauthenticated requests
+
+5. **Rewrote server/src/routes/jobs.ts**
+   - Replaced in-memory Map with Supabase queries
+   - Applied requireAuth middleware to all routes
+   - All queries scoped by user_id from auth context
+   - Added JobRow interface for database row type (snake_case)
+   - Added rowToJob function to convert DB rows to API response (camelCase)
+   - Maintained exact same API shape and behavior
+
+   Endpoints updated:
+   - GET /jobs - List all jobs (filtered by user_id, optional status filter)
+   - GET /jobs/:id - Get single job (scoped by user_id)
+   - POST /jobs - Create new job (includes duplicate VOD check per user)
+   - PATCH /jobs/:id - Update job status (scoped by user_id)
+   - POST /jobs/:id/cancel - Cancel running job (scoped by user_id)
+   - POST /jobs/:id/retry - Retry failed job (scoped by user_id)
+   - DELETE /jobs/:id - Delete job (scoped by user_id)
+
+6. **Created tests**
+   - Created server/src/routes/jobs.test.ts
+   - Tests cover all endpoints
+   - Mock auth middleware for testing
+   - Validation tests for required fields
+
+## Key changes:
+- In-memory Map replaced with supabase.from('jobs') queries
+- All queries include .eq('user_id', userId) for security
+- Database uses snake_case, API uses camelCase (conversion handled)
+- Auth required on all endpoints via middleware
+- Maintained same API shape and response format
+- Error handling for database operations
+- TODOs preserved for BullMQ integration
+
+## Environment variables needed:
+- SUPABASE_URL - Supabase project URL
+- SUPABASE_SERVICE_ROLE_KEY - Service role key for server-side operations
