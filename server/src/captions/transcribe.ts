@@ -39,7 +39,7 @@ export async function transcribeWithWhisperAPI(
   apiKey: string,
   config: TranscribeConfig = {}
 ): Promise<TranscriptionResult> {
-  const { model = 'base', language, wordTimestamps = true } = config
+  const { model: _model = 'base', language, wordTimestamps: _wordTimestamps = true } = config
   
   const formData = new FormData()
   

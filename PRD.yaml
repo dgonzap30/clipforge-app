@@ -1,0 +1,952 @@
+# ClipForge: Bridge to Competitive Parity PRD
+#
+# This PRD implements all items from the comprehensive audit report.
+# Run with: ralphy --yaml PRD.yaml --parallel
+#
+# Parallel groups allow independent tasks to run concurrently for faster completion.
+
+tasks:
+  # ============================================================================
+  # PHASE A: WIRE EXISTING CODE & FIX SETTINGS (Quick Wins)
+  # ============================================================================
+  # These must run sequentially as they're foundational changes
+
+  - title: Wire chat log fetching and restore chat weight in pipeline
+    completed: false
+    description: |
+      File: server/src/analysis/chat.ts
+
+      CURRENT STATE:
+      - Line 240-253: fetchChatLogs() is stubbed and returns empty array []
+      - Full chat analysis algorithm is written but has no data source
+      - server/src/pipeline/stages/analyze.ts line 29 hardcodes chatMoments: []
+      - Line 55 sets chat weight to 0 in fusion
+
+      IMPLEMENTATION:
+      1. In server/src/analysis/chat.ts, implement fetchChatLogs():
+         - Option A (preferred): Use Twitch Video Comments API endpoint if available
+         - Option B: Use third-party service like https://api.ivr.fi/v2/twitch/logs
+         - Parse chat log format: [HH:MM:SS] username: message
+         - Return ChatMessage[] with timestamps and content
+
+      2. In server/src/pipeline/stages/analyze.ts:
+         - Remove line 29 hardcoded chatMoments: []
+         - Call await analyzeChatLogs(chatLogs, config) where chatLogs = await fetchChatLogs(vodId)
+         - Change line 55 chat weight from 0 to 0.4 (restore default)
+
+      3. Add error handling for chat fetch failures (don't fail pipeline, just log warning)
+
+      ACCEPTANCE CRITERIA:
+      - Chat logs are fetched for a test VOD
+      - Chat moments appear in analysis output with hydeScore values
+      - Pipeline completes successfully with chat weight = 0.4
+      - If chat fetch fails, pipeline continues with empty chat array
+
+  - title: Wire viewer clips into pipeline and honor all job settings
+    completed: false
+    description: |
+      Files:
+      - server/src/pipeline/orchestrator.ts
+      - server/src/pipeline/stages/analyze.ts
+      - server/src/pipeline/stages/reframe.ts
+      - server/src/pipeline/stages/caption.ts
+      - server/src/captions/transcribe.ts
+
+      PART 1: Wire viewer clips
+      - In orchestrator.ts line 29, remove hardcoded viewerClips: []
+      - Before analyze stage, fetch viewer clips:
+        const twitchClient = new TwitchClient(appAccessToken)
+        const clips = await twitchClient.getClips(broadcasterId, {
+          startedAt: vodStartTime,
+          endedAt: vodEndTime
+        })
+      - Pass clips into analyze stage context
+
+      PART 2: Honor sensitivity setting
+      - In server/src/pipeline/stages/analyze.ts, read job.settings.sensitivity
+      - Map to analysis thresholds:
+        * low: peakThreshold 0.8, silenceThreshold 0.15, minHydeScore 15
+        * medium: peakThreshold 0.6, silenceThreshold 0.1, minHydeScore 20 (default)
+        * high: peakThreshold 0.4, silenceThreshold 0.05, minHydeScore 25
+      - Pass thresholds into analyzeAudioLevels() config
+
+      PART 3: Map outputFormat to targetAspect
+      - In server/src/pipeline/stages/reframe.ts, read job.settings.outputFormat
+      - Map to AspectRatio:
+        * 'vertical' → '9:16'
+        * 'square' → '1:1'
+        * 'horizontal' → '16:9'
+      - Pass to reframeVideo() call
+
+      PART 4: Honor autoCaptions toggle
+      - In server/src/pipeline/orchestrator.ts, check job.settings.autoCaptions
+      - If false, skip caption stage entirely
+
+      PART 5: Honor chatAnalysis and audioPeaks toggles
+      - In analyze.ts, check job.settings.chatAnalysis and job.settings.audioPeaks
+      - If chatAnalysis is false, skip chat analysis and set chat weight to 0
+      - If audioPeaks is false, skip audio analysis and set audio weight to 0
+
+      PART 6: Pass min/max duration to fusion
+      - In analyze.ts, read job.settings.minDuration and job.settings.maxDuration
+      - Pass into fuseSignals() config: minDuration, maxDuration
+
+      PART 7: Fix Whisper model selection bug
+      - In server/src/captions/transcribe.ts line 49, change from:
+        model: 'whisper-1'  // hardcoded
+      - To:
+        model: options.model || 'whisper-1'
+
+      ACCEPTANCE CRITERIA:
+      - Viewer clips from Twitch API are included in signal fusion
+      - Sensitivity setting changes detection thresholds (verify by checking logs)
+      - Output format produces correct aspect ratio (9:16, 1:1, or 16:9)
+      - autoCaptions: false skips caption stage
+      - chatAnalysis/audioPeaks toggles control which signals run
+      - min/max duration settings filter moments correctly
+      - Whisper model selection respects user choice
+
+  - title: Wire split-screen layout for gaming content
+    completed: false
+    parallel_group: 1
+    description: |
+      Files:
+      - server/src/extraction/reframe.ts (createSplitScreen exists but never called)
+      - server/src/pipeline/stages/reframe.ts
+
+      CURRENT STATE:
+      - createSplitScreen() is fully implemented at line 243-268 of reframe.ts
+      - Stacks facecam on top of gameplay using FFmpeg vstack filter
+      - Never called from pipeline
+
+      IMPLEMENTATION:
+      1. Add heuristic to detect gaming content:
+         - Check job.settings.splitScreen boolean if it exists
+         - OR auto-detect: if VOD has category in gaming categories list
+         - OR check for dual video sources (facecam + gameplay)
+
+      2. In reframe.ts stage, add conditional:
+         if (shouldUseSplitScreen(context)) {
+           await createSplitScreen({
+             facecamPath,
+             gameplayPath,
+             outputPath,
+             targetAspect: settings.targetAspect
+           })
+         } else {
+           // existing reframe logic
+         }
+
+      3. Update job settings schema to include splitScreen: boolean
+
+      ACCEPTANCE CRITERIA:
+      - Split-screen layout is generated when splitScreen setting is true
+      - Facecam appears on top, gameplay on bottom
+      - Output maintains 9:16 aspect ratio
+      - Falls back to normal reframe if splitScreen is false
+
+  # ============================================================================
+  # PHASE B: FACE TRACKING (Critical Quality Gap)
+  # ============================================================================
+
+  - title: Integrate MediaPipe Face Detection for smart reframing
+    completed: false
+    parallel_group: 1
+    description: |
+      File: server/src/extraction/reframe.ts
+
+      CURRENT STATE:
+      - Line 141-160: detectFacesForReframe() returns empty array with TODO
+      - Runs FFmpeg I-frame extraction but doesn't parse face data
+      - Always falls back to center crop
+      - Smoothing and interpolation code exists but is never used
+
+      IMPLEMENTATION:
+      1. Install MediaPipe dependency:
+         cd server && bun add @mediapipe/tasks-vision
+
+      2. Replace detectFacesForReframe() implementation:
+         - Extract frames at 2 FPS using FFmpeg:
+           $`ffmpeg -i ${inputPath} -vf "fps=2" ${tmpDir}/frame-%04d.jpg`
+         - For each frame, run MediaPipe FaceDetector:
+           import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision'
+           const vision = await FilesetResolver.forVisionTasks(...)
+           const detector = await FaceDetector.createFromOptions(vision, {
+             baseOptions: { modelAssetPath: 'face_detection_short_range.tflite' },
+             runningMode: 'IMAGE'
+           })
+         - For each detected face, get bounding box (x, y, width, height)
+         - Convert to crop keyframe:
+           {
+             timestamp: frameNumber / 2,  // 2 FPS
+             x: boundingBox.x + boundingBox.width/2,  // face center
+             y: boundingBox.y + boundingBox.height/2,
+             tracking_method: 'face_detection' as const
+           }
+         - Return keyframes array
+
+      3. Enable face tracking in pipeline:
+         - In server/src/pipeline/stages/reframe.ts line 64, change to:
+           faceTracking: true  // was false for MVP
+
+      4. The existing smoothKeyframes() and buildDynamicCropFilter() will handle interpolation
+
+      FALLBACK:
+      - If MediaPipe fails or no faces detected, fall back to center crop (existing behavior)
+
+      ACCEPTANCE CRITERIA:
+      - MediaPipe FaceDetector successfully detects faces in test clips
+      - Crop keyframes are generated with face center coordinates
+      - Face stays centered in 9:16 output video throughout clip
+      - Smoothing prevents jittery crop motion
+      - Falls back gracefully if no faces detected
+
+  - title: Add multi-face handling and speaker prioritization
+    completed: false
+    parallel_group: 2
+    description: |
+      File: server/src/extraction/reframe.ts
+
+      DEPENDS ON: Face detection must be working first
+
+      CURRENT STATE:
+      - Face detection returns all detected faces
+      - No logic to choose which face to track when multiple are present
+
+      IMPLEMENTATION:
+      1. In detectFacesForReframe(), when multiple faces detected:
+         - Strategy 1 (simple): Choose largest face by bounding box area
+         - Strategy 2 (advanced): Correlate with audio peaks from analysis data
+           * Pass audio moments into reframe context
+           * Choose face with most "active" appearance during audio peaks
+           * Heuristic: face with largest bbox change or most central position
+
+      2. Add face persistence logic:
+         - Track face IDs across frames using simple IOU (Intersection Over Union)
+         - Maintain consistent tracking of the same person throughout clip
+         - Avoid jumping between faces mid-clip
+
+      3. Add config option for multi-face behavior:
+         - 'largest': always track largest face (default)
+         - 'speaker': correlate with audio (requires audio moment data)
+         - 'center': prefer face closest to current frame center
+
+      ACCEPTANCE CRITERIA:
+      - When multiple faces detected, crop centers on the largest face
+      - Face tracking maintains consistency (doesn't jump to different person)
+      - Speaker-detection mode uses audio correlation if enabled
+      - Graceful handling if tracked face leaves frame
+
+  # ============================================================================
+  # PHASE C: CAPTION ENHANCEMENT
+  # ============================================================================
+
+  - title: Add animation effects to ASS caption generator
+    completed: false
+    parallel_group: 2
+    description: |
+      File: server/src/captions/transcribe.ts
+
+      CURRENT STATE:
+      - Line 171-243: generateTikTokASS() generates word-by-word color highlights
+      - Uses instant color swap with no animation
+      - ASS format supports \t (transform) tags for animations but they're not used
+
+      IMPLEMENTATION:
+      1. Add bounce effect to highlighted words:
+         - When word becomes active, scale from 100% to 110% over 0.1s, then to 100% over 0.1s
+         - ASS transform syntax: {\t(0,100,\fscx110\fscy110)\t(100,200,\fscx100\fscy100)}
+
+      2. Add glow pulse effect:
+         - Increase outline width on active word
+         - From: \bord3 (default)
+         - To: \bord5 during highlight, back to \bord3
+         - Syntax: {\t(0,100,\bord5)\t(duration-100,duration,\bord3)}
+
+      3. Add fade-in effect for each word:
+         - New words fade in from alpha=128 to alpha=0 (fully opaque)
+         - Syntax: {\fade(128,0,0,0,0,100)}
+
+      4. Make animations configurable:
+         interface CaptionAnimations {
+           bounce: boolean
+           glow: boolean
+           fadeIn: boolean
+           intensity: 'subtle' | 'medium' | 'strong'
+         }
+
+      5. Update generateTikTokASS signature to accept animations config
+
+      ACCEPTANCE CRITERIA:
+      - Bounce effect is visible on highlighted words
+      - Glow/outline pulse draws attention to active word
+      - Fade-in makes new words appear smoothly
+      - Animations can be toggled on/off via config
+      - No performance degradation (ASS rendering is hardware-accelerated)
+
+  - title: Add caption style presets
+    completed: false
+    parallel_group: 2
+    description: |
+      File: server/src/captions/transcribe.ts
+
+      CURRENT STATE:
+      - Single hardcoded style: Arial Black, white text, yellow highlight
+      - Line 180-192: ASS styles are defined inline
+
+      IMPLEMENTATION:
+      1. Define 5 style presets:
+
+         A. Bold Pop (default):
+            - Font: Arial Black, size 48
+            - Default: white (&HFFFFFF), outline black (&H000000), outline width 3
+            - Highlight: yellow (&H00FFFF)
+            - Position: bottom (Y=800)
+
+         B. Clean Minimal:
+            - Font: Helvetica, size 42
+            - Default: white (&HFFFFFF), outline gray (&H808080), outline width 2
+            - Highlight: cyan (&HFFFF00)
+            - Position: bottom (Y=820)
+
+         C. Hormozi (centered, bold key words):
+            - Font: Impact, size 52
+            - Default: white (&HFFFFFF), outline black (&H000000), outline width 4
+            - Highlight: orange (&H0080FF)
+            - Position: center (Y=540)
+            - All caps text transformation
+
+         D. Neon Glow:
+            - Font: Arial, size 46
+            - Default: cyan (&HFFFF00), glow outline (&HFF00FF), outline width 5
+            - Highlight: magenta (&HFF00FF)
+            - Border style: 3 (glow)
+
+         E. Comic:
+            - Font: Comic Sans MS, size 44
+            - Default: white (&HFFFFFF), black outline (&H000000), outline width 3
+            - Highlight: lime (&H00FF00)
+            - Enable emoji insertion by default
+
+      2. Export preset configs:
+         export const CAPTION_PRESETS: Record<string, CaptionStyle> = {
+           'bold-pop': { ... },
+           'clean-minimal': { ... },
+           'hormozi': { ... },
+           'neon-glow': { ... },
+           'comic': { ... }
+         }
+
+      3. Add preset parameter to generateTikTokASS():
+         preset?: keyof typeof CAPTION_PRESETS
+
+      4. Update job settings schema to include captionPreset: string
+
+      ACCEPTANCE CRITERIA:
+      - All 5 presets render correctly with distinct visual styles
+      - Preset selection via job.settings.captionPreset works
+      - Default preset is 'bold-pop'
+      - Each preset maintains readability on mobile devices
+
+  - title: Add contextual emoji insertion
+    completed: false
+    parallel_group: 3
+    description: |
+      File: server/src/captions/transcribe.ts
+
+      IMPLEMENTATION:
+      1. Create keyword-to-emoji mapping:
+         const EMOJI_MAP: Record<string, string> = {
+           'fire': '🔥',
+           'crazy': '😱',
+           'insane': '🤯',
+           'wow': '😮',
+           'lol': '😂',
+           'haha': '😂',
+           'dead': '💀',
+           'gg': '🎮',
+           'win': '🏆',
+           'lose': '😢',
+           'clutch': '⚡',
+           'no way': '😲',
+           'lets go': '🚀',
+           'poggers': '😎',
+           'omg': '😱',
+           'wtf': '❓',
+           'bruh': '💀'
+         }
+
+      2. Detect laughter in audio (optional enhancement):
+         - If transcript segment has [laughter] or [laughing] marker from Whisper
+         - Or detect via audio frequency analysis (high-pitched repetitive sounds)
+         - Insert 😂 emoji
+
+      3. Insert emojis in ASS file:
+         - For each word/phrase match, add emoji as separate dialogue line
+         - Position emoji adjacent to the word (X offset +width, same Y)
+         - Slightly larger font size for emoji visibility
+         - Syntax: {\fs60\pos(X,Y)}😂
+
+      4. Make emoji insertion toggleable:
+         - Add emojis: boolean to caption config
+         - Only insert if enabled (default: true for 'comic' preset, false for others)
+
+      5. Add emoji animation (optional):
+         - Scale emoji up 120% on insertion, settle to 100%
+         - Syntax: {\t(0,200,\fscx120\fscy120)\t(200,400,\fscx100\fscy100)}
+
+      ACCEPTANCE CRITERIA:
+      - Emojis appear next to relevant keywords
+      - Emoji positioning doesn't overlap with text
+      - Laughter detection inserts 😂 automatically
+      - Toggle works correctly
+      - Supports all common emoji characters
+
+  - title: Add filler word removal
+    completed: false
+    parallel_group: 3
+    description: |
+      File: server/src/captions/transcribe.ts
+
+      IMPLEMENTATION:
+      1. Define filler words to remove:
+         const FILLER_WORDS = [
+           'um', 'uh', 'umm', 'uhh',
+           'like', 'you know', 'i mean',
+           'sort of', 'kind of',
+           'basically', 'actually', 'literally'
+         ]
+
+      2. Post-process Whisper transcription:
+         - After receiving TranscriptionResult from Whisper
+         - Filter words array: remove words matching FILLER_WORDS (case-insensitive)
+         - Adjust subsequent word timestamps to close gaps
+         - Preserve segment boundaries (don't merge across segments)
+
+      3. Add silence gap detection:
+         - If gap between words > 1 second, keep the gap (natural pause)
+         - If gap < 1 second and caused by filler removal, close it
+
+      4. Make configurable:
+         - Add removeFillers: boolean to transcription config
+         - Add customFillerWords: string[] for user-defined additions
+         - Default: true
+
+      5. Preserve important context:
+         - Don't remove if word is stressed/emphasized (higher volume in that segment)
+         - Keep first word of a sentence even if it's a filler
+
+      ACCEPTANCE CRITERIA:
+      - Filler words are removed from caption output
+      - Timing gaps are closed smoothly
+      - Natural pauses (>1s) are preserved
+      - Caption flow remains natural and readable
+      - Toggle disables filler removal when false
+
+  # ============================================================================
+  # PHASE D: DYNAMIC EFFECTS PIPELINE
+  # ============================================================================
+
+  - title: Add auto-zoom stage with face-aware zooming
+    completed: false
+    description: |
+      Files:
+      - server/src/pipeline/stages/effects.ts (NEW FILE)
+      - server/src/pipeline/orchestrator.ts
+      - server/src/pipeline/types.ts
+
+      DEPENDS ON: Face tracking must be working, Phase A audio analysis must be wired
+
+      IMPLEMENTATION:
+      1. Create new pipeline stage: effects.ts
+         - Implements PipelineStage interface
+         - Runs between reframe and caption stages
+         - Reads audio moments from context.analysis.audioMoments
+         - Reads face keyframes from context.reframe.faceKeyframes (if available)
+
+      2. Auto-zoom logic:
+         - For each audio peak moment (type: 'peak' or 'sustained'):
+           * Apply progressive zoom-in over 0.5s (1.0x → 1.3x)
+           * Hold zoom for moment duration (typically 1-3s)
+           * Zoom-out over 0.5s (1.3x → 1.0x)
+         - If face data available: zoom toward face center
+         - If no face data: zoom toward center
+
+      3. FFmpeg zoompan filter:
+         - Build zoompan expression with keyframes:
+           zoompan=z='if(between(time,T1,T1+0.5),(time-T1)*0.6+1.0,if(between(time,T1+0.5,T2),1.3,if(between(time,T2,T2+0.5),1.3-(time-T2)*0.6,1.0)))':d=1
+         - If face tracking: add x/y pan toward face coordinates
+         - Example: x='iw/2-(iw/zoom/2)-FACE_X':y='ih/2-(ih/zoom/2)-FACE_Y'
+
+      4. Add to orchestrator:
+         - Insert effects stage between reframe and caption
+         - Pass audio moments and face data via context
+
+      5. Make configurable:
+         - Add autoZoom: boolean to job settings
+         - Add zoomIntensity: 'subtle' | 'medium' | 'strong' (1.2x | 1.3x | 1.5x)
+
+      ACCEPTANCE CRITERIA:
+      - Zoom effect activates during audio peaks
+      - Zoom is smooth (no jarring jumps)
+      - If face detected, zoom centers on face
+      - Zoom intensity is configurable
+      - Toggle works correctly
+
+  - title: Add transition effects for multi-clip compilations
+    completed: false
+    parallel_group: 4
+    description: |
+      File: server/src/pipeline/stages/effects.ts
+
+      CURRENT STATE:
+      - concatenateClips() in clipper.ts does simple concat without transitions
+
+      IMPLEMENTATION:
+      1. Add transition types to effects stage:
+         - 'cut': instant cut (already default)
+         - 'flash': white flash frame at transition (0.1s)
+         - 'zoom-in': clip A zooms in as clip B starts
+         - 'zoom-out': clip A zooms out as clip B starts
+
+      2. Flash transition:
+         - Insert single white frame between clips
+         - FFmpeg: generate white frame matching resolution
+         - Concat: clipA.mp4 | white.jpg (0.1s) | clipB.mp4
+
+      3. Zoom transitions:
+         - Apply zoompan to last 0.5s of clip A
+         - Zoom-in: scale 1.0x to 1.5x over 0.5s
+         - Zoom-out: scale 1.0x to 0.7x over 0.5s
+         - Use xfade filter for crossfade if desired
+
+      4. Add transition config:
+         - Add transitions: 'cut' | 'flash' | 'zoom-in' | 'zoom-out' to job settings
+         - Default: 'cut'
+
+      5. Apply during concatenation:
+         - Modify concatenateClips() to accept transition type
+         - Build appropriate FFmpeg filter chain
+
+      ACCEPTANCE CRITERIA:
+      - Flash transition shows white frame between clips
+      - Zoom transitions are smooth
+      - Transition type is configurable
+      - Falls back to cut if transition fails
+      - Works with 2+ clips in a compilation
+
+  - title: Add B-roll insertion using LLM transcript analysis
+    completed: false
+    parallel_group: 4
+    description: |
+      File: server/src/pipeline/stages/effects.ts
+
+      STRETCH GOAL - IMPLEMENT BASIC VERSION
+
+      IMPLEMENTATION:
+      1. Analyze transcript for B-roll opportunities:
+         - Pass Whisper transcript to an LLM (Claude or GPT-4):
+           Prompt: "Identify moments in this transcript where stock footage would enhance the video. For each moment, suggest a search query for stock footage. Format: [timestamp] query"
+         - Parse LLM response to get timestamps and queries
+
+      2. Fetch stock footage:
+         - Use Pexels API (free tier: 200 requests/hour)
+         - Endpoint: GET https://api.pexels.com/videos/search?query={query}&per_page=1
+         - Download first result to /tmp
+
+      3. Insert B-roll overlay:
+         - Use FFmpeg overlay filter
+         - Reduce main video to 40% opacity during B-roll
+         - Position B-roll in center, scale to fit
+         - Duration: match transcript segment (typically 2-5s)
+
+      4. Fallback behavior:
+         - If Pexels API fails, skip B-roll for that segment
+         - If no LLM available, disable B-roll feature
+
+      5. Make configurable:
+         - Add bRoll: boolean to job settings (default: false)
+         - Add bRollApiKey: string for Pexels API key
+         - Add llmProvider: 'claude' | 'openai' for transcript analysis
+
+      ACCEPTANCE CRITERIA:
+      - LLM identifies relevant B-roll moments from transcript
+      - Stock footage is fetched from Pexels
+      - B-roll overlay appears at correct timestamps
+      - Main video dims during B-roll
+      - Feature is opt-in via setting
+      - Graceful failure if API quota exceeded
+
+  # ============================================================================
+  # PHASE E: PLATFORM PUBLISHING
+  # ============================================================================
+
+  - title: Implement TikTok Content Posting API integration
+    completed: false
+    parallel_group: 5
+    description: |
+      Files:
+      - server/src/lib/tiktok.ts (NEW FILE)
+      - server/src/routes/platforms.ts (NEW FILE)
+      - server/src/lib/env.ts
+
+      IMPLEMENTATION:
+      1. Create TikTok API client (server/src/lib/tiktok.ts):
+         - OAuth 2.0 flow:
+           * GET https://www.tiktok.com/v2/auth/authorize/ with client_key, scope, redirect_uri
+           * POST https://open.tiktokapis.com/v2/oauth/token/ to exchange code for access token
+           * Refresh token support
+         - Direct Post API:
+           * POST /v2/post/publish/video/init/ to get upload URL
+           * Upload video file to returned upload URL
+           * POST publish confirm when upload completes
+         - Required scopes: video.upload, video.publish
+
+      2. Add OAuth routes (server/src/routes/platforms.ts):
+         - GET /api/platforms/tiktok/connect - redirect to TikTok auth
+         - GET /api/platforms/tiktok/callback - handle OAuth callback
+         - Store tokens in Supabase users table or new platform_connections table
+
+      3. Add environment variables to env.ts:
+         - TIKTOK_CLIENT_KEY
+         - TIKTOK_CLIENT_SECRET
+         - TIKTOK_REDIRECT_URI
+
+      4. Update server/src/routes/clips.ts bulk export endpoint:
+         - Line 436 TODO: implement actual upload
+         - If platform === 'tiktok':
+           * Get user's TikTok tokens from DB
+           * Create TikTokClient with tokens
+           * Call uploadVideo(clipPath, { caption, hashtags })
+           * Update clip record with tiktok_post_id
+
+      5. Add scheduling support:
+         - TikTok API supports scheduled publishing
+         - Add scheduledTime: Date to export request
+         - Pass to TikTok API publish call
+
+      ACCEPTANCE CRITERIA:
+      - OAuth flow redirects to TikTok and returns with access token
+      - Tokens are stored securely in database
+      - Video upload to TikTok succeeds
+      - Clip appears in TikTok drafts or published posts
+      - Scheduled posts work correctly
+      - Refresh token flow handles expired tokens
+
+  - title: Implement YouTube Data API v3 integration
+    completed: false
+    parallel_group: 5
+    description: |
+      Files:
+      - server/src/lib/youtube.ts (NEW FILE)
+      - server/src/routes/platforms.ts
+      - server/src/lib/env.ts
+
+      IMPLEMENTATION:
+      1. Create YouTube API client (server/src/lib/youtube.ts):
+         - OAuth 2.0 flow:
+           * GET https://accounts.google.com/o/oauth2/v2/auth
+           * POST https://oauth2.googleapis.com/token to exchange code
+           * Refresh token support
+         - Videos.insert endpoint:
+           * POST https://www.googleapis.com/upload/youtube/v3/videos
+           * Multipart upload: metadata JSON + video file
+           * Set snippet.title, snippet.description, snippet.tags
+           * Set status.privacyStatus: 'public' | 'private' | 'unlisted'
+         - Required scopes: youtube.upload, youtube.readonly
+
+      2. Add OAuth routes:
+         - GET /api/platforms/youtube/connect
+         - GET /api/platforms/youtube/callback
+         - Store tokens in platform_connections table
+
+      3. Add environment variables:
+         - YOUTUBE_CLIENT_ID
+         - YOUTUBE_CLIENT_SECRET
+         - YOUTUBE_REDIRECT_URI
+
+      4. Update bulk export endpoint:
+         - If platform === 'youtube':
+           * Get user's YouTube tokens
+           * Create YouTubeClient
+           * Upload with metadata:
+             - title: clip.title
+             - description: auto-generated or user-provided
+             - tags: ['#Shorts', ...custom tags]
+             - category: '20' (Gaming) or user-specified
+
+      5. Handle quota limits:
+         - YouTube API has daily quota (10,000 units/day by default)
+         - Video upload costs 1,600 units
+         - Catch quota errors and return user-friendly message
+
+      ACCEPTANCE CRITERIA:
+      - OAuth flow with Google succeeds
+      - Video uploads to YouTube Shorts
+      - #Shorts tag is set automatically
+      - Video appears in user's YouTube channel
+      - Quota errors are handled gracefully
+      - Refresh token works for long-lived connections
+
+  - title: Implement Instagram Graph API integration
+    completed: false
+    parallel_group: 5
+    description: |
+      Files:
+      - server/src/lib/instagram.ts (NEW FILE)
+      - server/src/routes/platforms.ts
+      - server/src/lib/env.ts
+
+      IMPLEMENTATION:
+      1. Create Instagram API client (server/src/lib/instagram.ts):
+         - Requires Facebook OAuth flow (Instagram uses Facebook Login):
+           * GET https://www.facebook.com/v18.0/dialog/oauth
+           * Exchange code for access token
+           * Get Instagram Business Account ID from Facebook Pages
+         - Reels upload (two-step process):
+           * POST /{ig-user-id}/media with video_url and media_type=REELS
+           * Returns creation_id
+           * POST /{ig-user-id}/media_publish with creation_id
+         - Required permissions: instagram_basic, instagram_content_publish, pages_read_engagement
+
+      2. Add OAuth routes:
+         - GET /api/platforms/instagram/connect
+         - GET /api/platforms/instagram/callback
+         - Store tokens and Instagram Business Account ID
+
+      3. Add environment variables:
+         - INSTAGRAM_APP_ID (Facebook App ID)
+         - INSTAGRAM_APP_SECRET
+         - INSTAGRAM_REDIRECT_URI
+
+      4. Video hosting requirement:
+         - Instagram requires video URL to be publicly accessible
+         - Generate long-lived signed URL from Supabase Storage (24-hour expiry)
+         - Or upload to temporary CDN endpoint
+
+      5. Update bulk export endpoint:
+         - If platform === 'instagram':
+           * Upload video to IG with caption, location_id (optional), user_tags
+           * Poll media status until published
+           * Update clip record with instagram_media_id
+
+      ACCEPTANCE CRITERIA:
+      - OAuth flow via Facebook succeeds
+      - Instagram Business Account is linked
+      - Reels upload completes successfully
+      - Video appears in user's Instagram profile
+      - Captions and hashtags are preserved
+      - Long-lived tokens are refreshed automatically
+
+  - title: Build platform connection UI in Settings page
+    completed: false
+    description: |
+      Files:
+      - src/pages/Settings.tsx
+      - src/hooks/usePlatforms.ts (NEW FILE)
+      - src/components/platforms/PlatformConnectionCard.tsx (NEW FILE)
+      - src/components/clips/ExportModal.tsx (NEW FILE)
+
+      DEPENDS ON: Platform API clients must be implemented first
+
+      IMPLEMENTATION:
+      1. Create usePlatforms hook (src/hooks/usePlatforms.ts):
+         - GET /api/platforms/connections - fetch all connected platforms
+         - POST /api/platforms/{platform}/disconnect - revoke connection
+         - Return { tiktok, youtube, instagram } connection status
+
+      2. Create PlatformConnectionCard component:
+         - Props: platform, connected, onConnect, onDisconnect
+         - Shows platform logo, connection status badge
+         - "Connect" button → triggers OAuth flow in popup window
+         - "Disconnect" button → revokes tokens
+         - Display connected username/channel name if available
+
+      3. Update Settings.tsx:
+         - Add "Platform Connections" section
+         - Render 3x PlatformConnectionCard for TikTok, YouTube, Instagram
+         - Handle OAuth popup window:
+           * Open /api/platforms/{platform}/connect in popup
+           * Listen for postMessage from callback
+           * Refresh platform connections on success
+
+      4. Create ExportModal component (src/components/clips/ExportModal.tsx):
+         - Triggered from Clips page "Export" button
+         - Select platform (TikTok | YouTube | Instagram)
+         - Edit caption/title
+         - Add hashtags (comma-separated)
+         - Schedule publish time (optional, DateTimePicker)
+         - "Export" button → POST /api/clips/bulk/export
+
+      5. Update Clips.tsx:
+         - Add "Export" button to clip action menu
+         - Open ExportModal on click
+         - Show loading state during export
+         - Toast notification on success/failure
+
+      6. Add platform-specific settings:
+         - Default hashtags per platform
+         - Privacy settings (public/private/unlisted for YouTube)
+         - Category selection for YouTube
+
+      ACCEPTANCE CRITERIA:
+      - Platform connection cards show correct status
+      - Connect button opens OAuth popup and completes flow
+      - Disconnect button revokes access
+      - Export modal allows platform selection and customization
+      - Export button triggers actual platform upload
+      - Success/failure states are shown to user
+      - Scheduled posts are queued correctly
+
+  # ============================================================================
+  # PHASE F: ADVANCED SCORING
+  # ============================================================================
+
+  - title: Add transcript-aware scoring with LLM analysis
+    completed: false
+    parallel_group: 6
+    description: |
+      Files:
+      - server/src/analysis/transcript.ts (NEW FILE)
+      - server/src/analysis/fusion.ts
+      - server/src/pipeline/stages/analyze.ts
+
+      IMPLEMENTATION:
+      1. Create transcript analysis module (server/src/analysis/transcript.ts):
+         - Accept Whisper transcript from caption stage
+         - Send to LLM (Claude Sonnet or GPT-4) with prompt:
+           "Analyze this Twitch stream transcript. Identify moments with:
+            - Punchlines or jokes (high virality)
+            - Emotional reactions (shock, excitement, anger)
+            - Story climaxes or reveals
+            - Quotable statements
+            Return JSON: [{ timestamp, type, score, reason }]"
+         - Parse LLM response to TranscriptMoment[]
+
+      2. Add transcript signal to fusion:
+         - In fusion.ts, add transcriptMoments to fuseSignals() parameters
+         - Add transcript weight to signal weights (default: 0.3)
+         - Scoring logic:
+           * High score (80-100): punchlines, reactions, quotes
+           * Medium score (50-79): interesting statements, transitions
+           * Low score (20-49): filler, setup, context
+
+      3. Update analyze stage:
+         - Pass transcript from caption stage back to analyze
+         - OR run transcript analysis immediately after transcription
+         - Feed transcript moments into fusion alongside chat/audio/clips
+
+      4. Adjust fusion weights:
+         - New default: audio 0.3, chat 0.3, transcript 0.3, clips 0.1
+         - Transcript gets higher weight because it captures semantic meaning
+
+      5. Generate contextual titles using LLM:
+         - Replace generateTitle() template logic with LLM call
+         - Prompt: "Generate a viral TikTok title (5-10 words) for this moment: {transcript_snippet}"
+         - Use title in clip metadata
+
+      ACCEPTANCE CRITERIA:
+      - LLM successfully analyzes transcript and returns moments
+      - Transcript moments are scored and merged into fusion
+      - Clips with high transcript scores are prioritized
+      - Titles are contextual and engaging (not templates)
+      - LLM errors don't crash the pipeline (fallback to templates)
+
+  - title: Add hook detection and clip boundary optimization
+    completed: false
+    parallel_group: 6
+    description: |
+      Files:
+      - server/src/analysis/hooks.ts (NEW FILE)
+      - server/src/analysis/fusion.ts
+
+      IMPLEMENTATION:
+      1. Create hook detection module (server/src/analysis/hooks.ts):
+         - Analyze first 3 seconds of each potential clip
+         - Check for strong hooks:
+           * Question: transcript starts with "What", "How", "Why", "When"
+           * Reaction: starts with "Oh my god", "No way", "Wait", "Holy"
+           * Statement: declarative sentence with emotional words
+           * Action: verb-first sentence ("Watch this", "Check this out")
+         - Score hook quality (0-100)
+
+      2. Penalize weak hooks:
+         - Mid-sentence starts: reduce score by 30%
+         - Silence/dead air in first 2s: reduce score by 40%
+         - Filler words as first word: reduce score by 20%
+
+      3. Optimize clip boundaries:
+         - Adjust startTime to align with sentence boundaries
+         - Move backward up to 2 seconds to catch full context
+         - Ensure clip starts on a strong word (not "um", "uh", "and")
+
+      4. Optimize clip endings:
+         - End on completed thought (sentence boundary)
+         - Avoid cutting mid-sentence unless natural pause
+         - Add 0.5s padding after last word for breathing room
+
+      5. Integrate with fusion:
+         - Add hookScore to SignalMoment metadata
+         - Boost final hydeScore by hookScore * 0.2 (20% weight)
+         - Filter out clips with hookScore < 30
+
+      ACCEPTANCE CRITERIA:
+      - Clips start with strong hooks (questions, reactions, statements)
+      - Weak hooks are penalized in scoring
+      - Clip boundaries align with sentence boundaries
+      - No mid-sentence cuts unless intentional
+      - Hook scoring improves clip retention metrics
+
+  - title: Add visual scene analysis using vision model
+    completed: false
+    parallel_group: 6
+    description: |
+      Files:
+      - server/src/analysis/visual.ts (NEW FILE)
+      - server/src/analysis/fusion.ts
+      - server/src/pipeline/stages/analyze.ts
+
+      STRETCH GOAL - BASIC IMPLEMENTATION
+
+      IMPLEMENTATION:
+      1. Extract keyframes for analysis:
+         - Use FFmpeg to extract 1 frame per second
+         - $`ffmpeg -i ${vodPath} -vf "fps=1" ${tmpDir}/frame-%04d.jpg`
+         - Sample frames only at potential clip moments (save compute)
+
+      2. Run vision model on keyframes:
+         - Option A: Use Claude Vision API (Sonnet 4.5 supports image analysis)
+           * Send frame + prompt: "Describe this gaming moment. Identify: kills, deaths, victories, player reactions, on-screen alerts."
+           * Parse response for event types
+         - Option B: Use open-source model like CLIP or ViT
+           * Classify frame into categories: action, reaction, victory, defeat, neutral
+         - Option C: Use game-specific object detection
+           * For popular games, detect UI elements (kill feed, score, objectives)
+
+      3. Detect visual-only moments:
+         - Sudden color changes (victory screen, death screen)
+         - On-screen text alerts (popups, achievements)
+         - Multiple subjects in frame (group reactions)
+         - Emotional facial expressions (requires face analysis model)
+
+      4. Add visual signal to fusion:
+         - Create VisualMoment[] from detected events
+         - Add visual weight to fusion (default: 0.2)
+         - Score visual moments:
+           * High (80-100): kills, victories, achievements
+           * Medium (50-79): reactions, alerts
+           * Low (20-49): neutral gameplay
+
+      5. Game-specific event detection (optional):
+         - Maintain mapping of game titles to event detectors
+         - For Valorant: detect kill feed UI elements
+         - For League: detect penta-kill banners
+         - For Fortnite: detect victory royale screen
+
+      ACCEPTANCE CRITERIA:
+      - Keyframes are extracted at 1 FPS for analysis
+      - Vision model detects game events or emotional moments
+      - Visual moments are scored and added to fusion
+      - Visual-only moments (no audio/chat) are captured
+      - Game-specific detection works for at least 1 popular game
+      - Performance is acceptable (analysis doesn't double pipeline time)

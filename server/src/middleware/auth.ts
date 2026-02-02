@@ -10,6 +10,10 @@ declare module 'hono' {
       user_metadata?: Record<string, any>
       app_metadata?: Record<string, any>
     } | null
+    userId: string
+    user_id: string
+    accessToken: string
+    twitchClient: any
   }
 }
 
@@ -31,6 +35,8 @@ export async function authMiddleware(c: Context, next: Next) {
 
   // Store user in context for use in route handlers
   c.set('user', user)
+  c.set('userId', user.id)
+  c.set('user_id', user.id)
 
   await next()
 }
@@ -49,4 +55,21 @@ export async function optionalAuthMiddleware(c: Context, next: Next) {
   }
 
   await next()
+}
+
+// Alias for convenience
+export const requireAuth = authMiddleware
+
+// Type for authenticated context
+export type AuthContext = {
+  Variables: {
+    user: {
+      id: string
+      email?: string
+      user_metadata?: Record<string, any>
+      app_metadata?: Record<string, any>
+    }
+    userId: string
+    user_id: string
+  }
 }

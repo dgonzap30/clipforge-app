@@ -15,17 +15,48 @@ export const clipsKeys = {
 
 /**
  * Hook to fetch a list of clips with optional filters
+ * Returns a friendly interface with clips data and helper functions
  */
 export function useClips(options?: {
   status?: Clip['status']
   limit?: number
   offset?: number
 }) {
-  return useQuery({
+  const queryClient = useQueryClient()
+
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
     queryKey: clipsKeys.list(options),
     queryFn: () => api.clips.list(options),
     staleTime: 1000 * 60 * 5, // 5 minutes
   })
+
+  const clips = data?.clips ?? []
+  const total = data?.total ?? 0
+  const hasMore = data?.hasMore ?? false
+  const error = queryError instanceof Error ? queryError.message : queryError ? 'Failed to fetch clips' : null
+
+  const deleteClipMutation = useMutation({
+    mutationFn: (id: string) => api.clips.delete(id),
+    onSuccess: (_data, id) => {
+      // Invalidate and refetch all clips lists
+      queryClient.invalidateQueries({ queryKey: clipsKeys.lists() })
+      // Remove the specific clip from cache
+      queryClient.removeQueries({ queryKey: clipsKeys.detail(id) })
+    },
+  })
+
+  return {
+    clips,
+    total,
+    hasMore,
+    loading,
+    error,
+    deleteClip: deleteClipMutation.mutateAsync,
+  }
 }
 
 /**

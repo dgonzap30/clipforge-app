@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Dashboard } from '@/pages/Dashboard'
 import { Clips } from '@/pages/Clips'
 import { Queue } from '@/pages/Queue'

@@ -2,16 +2,20 @@ import { ArrowRight, Play } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Clip } from '@/lib/api'
 
-export interface RecentClipItem {
-  id: string
-  title: string
-  game: string
-  duration: string
-  views: string
+interface RecentClipsProps {
+  clips?: Clip[]
 }
 
-interface RecentClipsProps {
-  clips?: RecentClipItem[]
+// Helper to format duration in seconds to MM:SS
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+// Helper to format HYDE score as percentage
+function formatScore(score: number): string {
+  return `${Math.round(score)}%`
 }
 
 export function RecentClips({ clips = [] }: RecentClipsProps) {

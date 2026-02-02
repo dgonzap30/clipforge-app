@@ -1,7 +1,9 @@
 import { Worker, Job } from 'bullmq'
 import { redisConnection } from './connection'
 import { runPipeline } from '../pipeline/orchestrator'
+import { supabase } from '../lib/supabase'
 import type { VodProcessingJobData } from './processingQueue'
+import type { ProcessingJob } from '../routes/jobs'
 
 /**
  * BullMQ Worker for processing VOD jobs
@@ -17,16 +19,65 @@ export const vodWorker = new Worker<VodProcessingJobData>(
     console.log(`[Worker] Processing job ${jobId} (BullMQ job ID: ${job.id})`)
 
     try {
-      // Run the pipeline orchestrator
-      const result = await runPipeline(jobId)
+      // Fetch job from database
+      const { data: jobRow, error: fetchError } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('id', jobId)
+        .single()
 
-      if (result.success) {
-        console.log(`[Worker] Job ${jobId} completed successfully. Clips generated: ${result.clipIds.length}`)
-        return result
-      } else {
-        console.error(`[Worker] Job ${jobId} failed: ${result.error}`)
-        throw new Error(result.error || 'Pipeline failed')
+      if (fetchError || !jobRow) {
+        const errorMessage = `Failed to fetch job ${jobId}: ${fetchError?.message || 'Job not found'}`
+
+        // Update DB status before throwing (if we can identify the jobId)
+        try {
+          await supabase.from('jobs').update({
+            status: 'failed',
+            error: errorMessage,
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq('id', jobId)
+        } catch (updateError) {
+          console.error(`[Worker] Failed to update job status for ${jobId}:`, updateError)
+        }
+
+        throw new Error(errorMessage)
       }
+
+      // Convert snake_case to camelCase for ProcessingJob
+      const processingJob: ProcessingJob = {
+        id: jobRow.id,
+        user_id: jobRow.user_id,
+        vodId: jobRow.vod_id,
+        twitchVodId: jobRow.twitch_vod_id,
+        vodUrl: jobRow.vod_url,
+        title: jobRow.title,
+        channelLogin: jobRow.channel_login,
+        duration: jobRow.vod_duration,
+        status: jobRow.status,
+        progress: jobRow.progress,
+        currentStep: jobRow.current_step,
+        clipsFound: jobRow.clips_found,
+        error: jobRow.error,
+        createdAt: jobRow.created_at,
+        updatedAt: jobRow.updated_at,
+        completedAt: jobRow.completed_at,
+        settings: jobRow.settings,
+      }
+
+      // Run the pipeline orchestrator with progress callback
+      await runPipeline(processingJob, jobRow.user_id, {
+        progressCallback: async (jobId, status, progress, message) => {
+          await supabase.from('jobs').update({
+            status,
+            progress,
+            current_step: message,
+            updated_at: new Date().toISOString(),
+          }).eq('id', jobId)
+        }
+      })
+
+      console.log(`[Worker] Job ${jobId} completed successfully`)
     } catch (error) {
       console.error(`[Worker] Error processing job ${jobId}:`, error)
       throw error // Re-throw to mark BullMQ job as failed

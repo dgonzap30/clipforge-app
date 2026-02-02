@@ -5,7 +5,6 @@
  */
 
 import { $ } from 'bun'
-import { nanoid } from 'nanoid'
 import { SignalMoment } from '../analysis/fusion'
 
 export interface ClipConfig {
@@ -65,7 +64,7 @@ export async function extractClip(config: ClipConfig): Promise<ExtractedClip> {
   const endTime = moment.timestamp + moment.duration - preRoll + postRoll
   const duration = endTime - startTime
   
-  const clipId = nanoid()
+  const clipId = crypto.randomUUID()
   const outputPath = `${outputDir}/${clipId}.${format}`
   const thumbnailPath = `${outputDir}/${clipId}_thumb.jpg`
   

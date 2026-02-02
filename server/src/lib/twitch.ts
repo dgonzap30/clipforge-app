@@ -112,8 +112,44 @@ export async function validateToken(accessToken: string): Promise<boolean> {
       'Authorization': `OAuth ${accessToken}`,
     },
   })
-  
+
   return response.ok
+}
+
+// App Access Token (for server-side API calls without user context)
+let appAccessToken: string | null = null
+let appTokenExpiry: number | null = null
+
+export async function getAppAccessToken(): Promise<string> {
+  // Return cached token if still valid
+  if (appAccessToken && appTokenExpiry && Date.now() < appTokenExpiry) {
+    return appAccessToken
+  }
+
+  // Request new app access token
+  const response = await fetch(`${TWITCH_AUTH_BASE}/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: env.TWITCH_CLIENT_ID,
+      client_secret: env.TWITCH_CLIENT_SECRET,
+      grant_type: 'client_credentials',
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to get app access token: ${error}`)
+  }
+
+  const data = await response.json()
+  appAccessToken = data.access_token
+  // Set expiry 1 hour before actual expiry as buffer
+  appTokenExpiry = Date.now() + (data.expires_in - 3600) * 1000
+
+  return appAccessToken
 }
 
 // API client class
@@ -149,9 +185,12 @@ export class TwitchClient {
   }
   
   // Get user by ID or login
-  async getUserByLogin(login: string): Promise<TwitchUser | null> {
+  async getUserByLogin(login: string): Promise<TwitchUser> {
     const data = await this.request<{ data: TwitchUser[] }>(`/users?login=${login}`)
-    return data.data[0] || null
+    if (!data.data[0]) {
+      throw new Error(`User not found: ${login}`)
+    }
+    return data.data[0]
   }
   
   // Get VODs for a user

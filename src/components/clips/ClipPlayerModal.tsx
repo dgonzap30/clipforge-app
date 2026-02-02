@@ -1,6 +1,5 @@
 import { X, Play, Pause, Volume2, VolumeX, Maximize, Download } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
 import { clips } from '@/lib/api'
 
 interface ClipPlayerModalProps {

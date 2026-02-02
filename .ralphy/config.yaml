@@ -1,0 +1,78 @@
+project:
+  name: "ClipForge"
+  language: "TypeScript"
+  framework: "Hono + React"
+  runtime: "Bun"
+  description: "Twitch VOD-to-vertical-clip pipeline with AI-driven moment detection"
+
+commands:
+  test: "cd server && bun test"
+  lint: "bun run lint"
+  build: "bun run build"
+  dev: "bun run dev"
+
+rules:
+  # Core patterns
+  - "Use Hono framework for all HTTP routes (server/src/routes/*.ts)"
+  - "Use Bun's shell template literals ($`command`) for all FFmpeg and yt-dlp operations"
+  - "Use Supabase client from server/src/lib/supabase.ts for all DB and storage operations"
+  - "Use Zod for all request validation via @hono/zod-validator"
+  - "Use BullMQ for all async job processing"
+
+  # Video processing
+  - "All video/audio processing must use FFmpeg via Bun shell, never exec/spawn"
+  - "Always pass proper file paths to FFmpeg with quotes for paths containing spaces"
+  - "Generate thumbnails during clip extraction (already implemented in clipper.ts)"
+  - "Use CRF quality presets from clipper.ts (high/medium/low)"
+
+  # Pipeline patterns
+  - "Pipeline stages must implement PipelineStage interface from server/src/pipeline/types.ts"
+  - "Stages return updated PipelineContext, never mutate context in place"
+  - "Use progressCallback for all progress reporting to Supabase DB"
+  - "Clean up temp files in stage cleanup() methods"
+
+  # Auth and middleware
+  - "Use requireAuth middleware from server/src/middleware/auth.ts for protected routes"
+  - "Extract user from Supabase JWT via c.get('user') and c.get('userId')"
+  - "Use TwitchClient from server/src/lib/twitch.ts for all Twitch API calls"
+
+  # Frontend patterns
+  - "Use TanStack Query hooks from src/hooks/*.ts for all server state"
+  - "Use Zustand store for client-only state"
+  - "Follow TailwindCSS dark theme token pattern (dark-*, forge-*)"
+  - "Use lucide-react for all icons"
+
+  # Error handling
+  - "Wrap Supabase operations in try/catch and return typed result objects {success, data, error}"
+  - "Throw PipelineError with stage context for pipeline failures"
+  - "Return 4xx status codes for client errors, 5xx for server errors"
+
+  # Environment
+  - "Never hardcode secrets - use env.ts from server/src/lib/env.ts"
+  - "Add new env vars to env.ts with Zod validation"
+
+  # AI/ML integration
+  - "Prefer WASM-based models (MediaPipe) over Python scripts to avoid extra dependencies"
+  - "If using external ML models, download to /tmp/ and cache for pipeline duration"
+  - "Feed analysis results into PipelineContext for downstream stages"
+
+boundaries:
+  never_touch:
+    - "*.lock"
+    - "bun.lockb"
+    - "node_modules/**"
+    - ".git/**"
+    - "dist/**"
+    - "build/**"
+    - ".ralphy/**"
+    - "ralphy/**"
+    - "PRD.yaml"
+    - "README.md"
+  # Allow modification of everything else including:
+  # - server/src/**/*.ts
+  # - src/**/*.tsx
+  # - package.json (for new dependencies)
+  # - server/package.json (for new dependencies)
+
+capabilities:
+  browser: "auto"

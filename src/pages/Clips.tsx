@@ -248,7 +248,7 @@ export function Clips() {
                 <h3 className="font-medium truncate">{clip.title}</h3>
                 <div className="flex items-center justify-between mt-1">
                   <p className="text-sm text-dark-400">
-                    Score: {(clip.hydeScore * 100).toFixed(0)}
+                    Score: {Math.round(clip.hydeScore)}
                   </p>
                   <p className="text-xs text-dark-500">
                     {new Date(clip.createdAt).toLocaleDateString()}
@@ -290,10 +290,9 @@ export function Clips() {
 
       {/* Clip Player Modal */}
       <ClipPlayerModal
-        clip={selectedClip}
+        clipId={selectedClip?.id ?? ''}
         isOpen={!!selectedClip}
         onClose={() => setSelectedClip(null)}
-        onDownload={handleDownload}
       />
     </div>
   )

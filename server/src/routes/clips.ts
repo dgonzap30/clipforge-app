@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { nanoid } from 'nanoid'
 import { supabase } from '../lib/supabase'
 import { clips as clipsStorage } from '../lib/storage'
 import { requireAuth, type AuthContext } from '../middleware/auth'
@@ -104,7 +103,7 @@ clipsRoutes.get('/', async (c) => {
       total: count || 0,
       hasMore: count ? offsetNum + limitNum < count : false,
     })
-  } catch (error) {
+  } catch (error: Error | unknown) {
     console.error('Unexpected error fetching clips:', error)
     return c.json({ error: 'Internal server error' }, 500)
   }
@@ -131,39 +130,56 @@ clipsRoutes.get('/:id', async (c) => {
     const clipWithUrls = await addSignedUrls(data)
 
     return c.json(clipWithUrls)
-  } catch (error) {
+  } catch (error: Error | unknown) {
     console.error('Unexpected error fetching clip:', error)
     return c.json({ error: 'Internal server error' }, 500)
   }
 })
 
 // Get signed URL for clip video
-clipsRoutes.get('/:id/signed-url', (c) => {
+clipsRoutes.get('/:id/signed-url', async (c) => {
+  const user_id = c.get('user_id')
   const id = c.req.param('id')
-  const clip = clips.get(id)
 
-  if (!clip) {
-    return c.json({ error: 'Clip not found' }, 404)
+  try {
+    // Fetch clip from database
+    const { data: clip, error } = await supabase
+      .from('clips')
+      .select('status, video_path')
+      .eq('id', id)
+      .eq('user_id', user_id)
+      .single()
+
+    if (error || !clip) {
+      return c.json({ error: 'Clip not found' }, 404)
+    }
+
+    if (clip.status !== 'ready') {
+      return c.json({ error: 'Clip not ready for playback' }, 400)
+    }
+
+    if (!clip.video_path) {
+      return c.json({ error: 'Video URL not available' }, 404)
+    }
+
+    // Generate signed URL from storage
+    const result = await clipsStorage.getSignedUrl(clip.video_path)
+
+    if (!result.success || !result.url) {
+      return c.json({ error: 'Failed to generate signed URL' }, 500)
+    }
+
+    const expiresIn = 3600 // 1 hour in seconds
+
+    return c.json({
+      url: result.url,
+      expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      expiresIn,
+    })
+  } catch (error: Error | unknown) {
+    console.error('Unexpected error generating signed URL:', error)
+    return c.json({ error: 'Internal server error' }, 500)
   }
-
-  if (clip.status !== 'ready') {
-    return c.json({ error: 'Clip not ready for playback' }, 400)
-  }
-
-  // TODO: Generate actual signed URL from S3/R2/storage
-  // For now, return the videoUrl directly (in production this would be a time-limited signed URL)
-  const signedUrl = clip.videoUrl || null
-  const expiresIn = 3600 // 1 hour in seconds
-
-  if (!signedUrl) {
-    return c.json({ error: 'Video URL not available' }, 404)
-  }
-
-  return c.json({
-    url: signedUrl,
-    expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
-    expiresIn,
-  })
 })
 
 // Create clip (called by processing pipeline)
@@ -172,8 +188,7 @@ clipsRoutes.post('/', zValidator('json', createClipSchema), async (c) => {
   const data = c.req.valid('json')
 
   try {
-    const clipId = nanoid()
-    const duration = data.endTime - data.startTime
+    const clipId = crypto.randomUUID()
 
     const { data: clip, error } = await supabase
       .from('clips')
@@ -185,7 +200,6 @@ clipsRoutes.post('/', zValidator('json', createClipSchema), async (c) => {
         title: data.title,
         start_time: data.startTime,
         end_time: data.endTime,
-        duration,
         status: 'processing',
         hyde_score: data.hydeScore,
         signals: data.signals,
@@ -202,7 +216,7 @@ clipsRoutes.post('/', zValidator('json', createClipSchema), async (c) => {
     const clipWithUrls = await addSignedUrls(clip)
 
     return c.json(clipWithUrls, 201)
-  } catch (error) {
+  } catch (error: Error | unknown) {
     console.error('Unexpected error creating clip:', error)
     return c.json({ error: 'Internal server error' }, 500)
   }
@@ -264,7 +278,7 @@ clipsRoutes.patch('/:id', zValidator('json', updateClipSchema), async (c) => {
     const clipWithUrls = await addSignedUrls(clip)
 
     return c.json(clipWithUrls)
-  } catch (error) {
+  } catch (error: Error | unknown) {
     console.error('Unexpected error updating clip:', error)
     return c.json({ error: 'Internal server error' }, 500)
   }
@@ -313,7 +327,7 @@ clipsRoutes.delete('/:id', async (c) => {
     }
 
     return c.json({ success: true })
-  } catch (error) {
+  } catch (error: Error | unknown) {
     console.error('Unexpected error deleting clip:', error)
     return c.json({ error: 'Internal server error' }, 500)
   }
@@ -366,7 +380,7 @@ clipsRoutes.post('/bulk/delete', zValidator('json', z.object({
     }
 
     return c.json({ deleted: clips?.length || 0 })
-  } catch (error) {
+  } catch (error: Error | unknown) {
     console.error('Unexpected error bulk deleting clips:', error)
     return c.json({ error: 'Internal server error' }, 500)
   }
@@ -422,7 +436,7 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
     // TODO: Queue export jobs for actual platform upload
 
     return c.json({ exported })
-  } catch (error) {
+  } catch (error: Error | unknown) {
     console.error('Unexpected error bulk exporting clips:', error)
     return c.json({ error: 'Internal server error' }, 500)
   }

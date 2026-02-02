@@ -140,22 +140,22 @@ export async function reframeVideo(config: ReframeConfig): Promise<ReframeResult
  */
 async function detectFacesForReframe(
   inputPath: string,
-  cropWidth: number,
-  cropHeight: number,
-  sourceWidth: number,
-  sourceHeight: number
+  _cropWidth: number,
+  _cropHeight: number,
+  _sourceWidth: number,
+  _sourceHeight: number
 ): Promise<CropKeyframe[]> {
   // Use FFmpeg's metadata extraction for face detection
   // This is a simplified approach - for production, use MediaPipe
-  
-  const result = await $`ffmpeg -i ${inputPath} \
+
+  const _result = await $`ffmpeg -i ${inputPath} \
     -vf "select='eq(pict_type,I)',metadata=print:file=-" \
     -vsync vfr -f null - 2>&1`.text()
-  
+
   // Parse face positions from output
   // For now, return empty to fall back to center crop
   // TODO: Implement proper face detection parsing
-  
+
   return []
 }
 
@@ -191,20 +191,20 @@ function buildCropFilter(
   keyframes: CropKeyframe[],
   cropWidth: number,
   cropHeight: number,
-  sourceWidth: number,
-  sourceHeight: number
+  _sourceWidth: number,
+  _sourceHeight: number
 ): string {
   if (keyframes.length === 1) {
     // Static crop
     const kf = keyframes[0]
     return `crop=${cropWidth}:${cropHeight}:${kf.x}:${kf.y}`
   }
-  
+
   // Dynamic crop with interpolation
   // Build expression for x and y based on time
   const xExpr = buildInterpolationExpr(keyframes, 'x', 't')
   const yExpr = buildInterpolationExpr(keyframes, 'y', 't')
-  
+
   return `crop=${cropWidth}:${cropHeight}:${xExpr}:${yExpr}`
 }
 

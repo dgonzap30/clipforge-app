@@ -10,14 +10,20 @@ import { ProcessingJob } from '../routes/jobs'
 
 export interface PipelineContext {
   // Job metadata
-  job: ProcessingJob
+  job?: ProcessingJob
+  jobId?: string
+  vodId?: string
+  userId?: string
 
   // Working directory for this job
   workDir: string
+  tempDir?: string
+  outputDir?: string
 
   // VOD information
   vodUrl: string
-  vodTitle: string
+  vodTitle?: string
+  vodPath?: string
 
   // File paths (populated as pipeline progresses)
   downloadedVideoPath?: string
@@ -29,15 +35,33 @@ export interface PipelineContext {
   // Extracted clips
   clipPaths?: string[]
   clipIds?: string[]
+  extractedClips?: Array<{ path: string; startTime: number; endTime: number; clipId?: string }>
+  extractedClipsDir?: string
+  reframedClips?: Array<{ path: string; originalPath: string; clipId?: string }>
+  reframedClipsDir?: string
+  captionedClips?: Array<{ path: string; originalPath: string; clipId?: string }>
+  uploadedClips?: Array<{
+    clipId: string
+    videoPath: string
+    thumbnailPath: string
+    videoUrl: string
+    thumbnailUrl: string
+  }>
+
+  // Pipeline state
+  currentStage?: string
+  progress?: number
+  settings?: Record<string, any>
 
   // Temporary files to clean up
   tempFiles: string[]
+  filesToCleanup?: string[]
 
   // Error tracking
   error?: string
 
   // Custom data for stages to share state
-  metadata: Record<string, any>
+  metadata?: Record<string, any>
 }
 
 export interface PipelineStage {
@@ -52,10 +76,15 @@ export interface PipelineStage {
 
   // Optional: cleanup on failure
   cleanup?(context: PipelineContext): Promise<void>
+
+  // Optional: retry configuration
+  retryable?: boolean
+  maxRetries?: number
+  onError?(error: Error, context: PipelineContext): Promise<void>
 }
 
 export interface ProgressCallback {
-  (progress: number, status: string, details?: any): void
+  (jobId: string, status: string, progress: number, message: string): Promise<void> | void
 }
 
 export interface DownloadProgress {
@@ -71,4 +100,23 @@ export interface StageProgress {
   percent: number
   status: string
   details?: any
+}
+
+export interface PipelineConfig {
+  maxRetries?: number
+  retryDelay?: number
+  cleanupOnFailure?: boolean
+  progressCallback?: (jobId: string, status: string, progress: number, message: string) => Promise<void> | void
+}
+
+export class PipelineError extends Error {
+  constructor(
+    message: string,
+    public stageName: string,
+    public context?: PipelineContext,
+    public cause?: Error
+  ) {
+    super(message)
+    this.name = 'PipelineError'
+  }
 }

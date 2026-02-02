@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect, mock, beforeEach } from 'bun:test'
-import { ExtractStage, initializeSupabaseClient } from './extract'
+import { ExtractStage } from './extract'
 import { PipelineContext } from '../types'
 import { SignalMoment } from '../../analysis/fusion'
 

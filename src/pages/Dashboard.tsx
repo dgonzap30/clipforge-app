@@ -7,26 +7,23 @@ import { useJobs } from '@/hooks/useJobs'
 
 export function Dashboard() {
   // Fetch clips data (limit to recent 10 clips)
-  const { clips, loading: clipsLoading } = useClips({ limit: 10 })
-
-  // Fetch all jobs to get processing count
-  const { jobs: allJobs, loading: jobsLoading } = useJobs()
+  const { clips, total, loading: clipsLoading } = useClips({ limit: 10 })
 
   // Fetch only processing/active jobs for the queue
-  const { jobs: processingJobs } = useJobs({
+  const { jobs: processingJobs, loading: jobsLoading } = useJobs({
     pollInterval: 5000 // Poll every 5 seconds for real-time updates
   })
 
   // Calculate stats from real data
-  const totalClips = clips.length // Note: This is just the loaded clips, not total
+  const totalClips = total
   const processingCount = processingJobs.filter(
-    j => !['completed', 'failed'].includes(j.status)
+    (j) => !['completed', 'failed'].includes(j.status)
   ).length
 
   // Calculate clips created today
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const clipsToday = clips.filter(clip => {
+  const clipsToday = clips.filter((clip) => {
     const clipDate = new Date(clip.createdAt)
     clipDate.setHours(0, 0, 0, 0)
     return clipDate.getTime() === today.getTime()
@@ -51,7 +48,6 @@ export function Dashboard() {
           icon={Film}
           label="Total Clips"
           value={clipsLoading ? '...' : String(totalClips)}
-          trend={totalClips > 0 ? { value: 12, positive: true } : undefined}
         />
         <StatsCard
           icon={Clock}
@@ -62,24 +58,23 @@ export function Dashboard() {
         <StatsCard
           icon={TrendingUp}
           label="Best Performer"
-          value={bestClip ? String(Math.round(bestClip.hydeScore * 100)) : '0'}
+          value={bestClip ? String(Math.round(bestClip.hydeScore)) : '0'}
           sublabel="HYDE score"
         />
         <StatsCard
           icon={Zap}
           label="Clips Today"
           value={clipsLoading ? '...' : String(clipsToday)}
-          trend={clipsToday > 0 ? { value: 33, positive: true } : undefined}
         />
       </div>
 
       {/* Content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <RecentClips clips={clips} loading={clipsLoading} />
+          <RecentClips clips={clips} />
         </div>
         <div>
-          <ProcessingQueue jobs={processingJobs} loading={jobsLoading} />
+          <ProcessingQueue jobs={processingJobs} />
         </div>
       </div>
     </div>

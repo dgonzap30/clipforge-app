@@ -7,24 +7,74 @@
 
 import { PipelineContext, PipelineStage, PipelineConfig, PipelineError } from './types'
 import type { ProcessingJob, JobStatus } from '../routes/jobs'
-import { downloadStage } from './stages/download'
-import { analyzeStage } from './stages/analyze'
-import { extractStage } from './stages/extract'
+import { createDownloadStage } from './stages/download'
+import { analyze } from './stages/analyze'
+import { createExtractStage } from './stages/extract'
 import { reframeStage } from './stages/reframe'
 import { captionStage } from './stages/caption'
-import { uploadStage } from './stages/upload'
-import { nanoid } from 'nanoid'
+import { createUploadStage } from './stages/upload'
 import path from 'path'
 import { $ } from 'bun'
 
+// Wrap analyze function in a PipelineStage
+const analyzeStageWrapper: PipelineStage = {
+  name: 'analyze',
+  async execute(context: PipelineContext): Promise<PipelineContext> {
+    if (!context.downloadedVideoPath) {
+      throw new Error('Downloaded video path is required for analysis')
+    }
+
+    const result = await analyze({
+      videoPath: context.downloadedVideoPath,
+      chatMoments: [],
+      viewerClips: [],
+    })
+
+    return {
+      ...context,
+      extractedAudioPath: result.audioPath,
+      moments: result.fusedMoments,
+      tempFiles: [...context.tempFiles, result.audioPath],
+    }
+  },
+}
+
+// Wrap caption function in a PipelineStage
+const captionStageWrapper: PipelineStage = {
+  name: 'caption',
+  async execute(context: PipelineContext): Promise<PipelineContext> {
+    const clips = context.reframedClips || []
+    const outputDir = context.reframedClipsDir || context.workDir
+    const captionedClips = []
+
+    for (const clip of clips) {
+      const result = await captionStage({
+        videoPath: clip.path,
+        outputDir,
+      })
+
+      captionedClips.push({
+        path: result.outputVideoPath,
+        originalPath: clip.path,
+        clipId: clip.clipId,
+      })
+    }
+
+    return {
+      ...context,
+      captionedClips,
+    }
+  },
+}
+
 // Pipeline stages in order
 const PIPELINE_STAGES: PipelineStage[] = [
-  downloadStage,
-  analyzeStage,
-  extractStage,
+  createDownloadStage(),
+  analyzeStageWrapper,
+  createExtractStage(),
   reframeStage,
-  captionStage,
-  uploadStage,
+  captionStageWrapper,
+  createUploadStage(),
 ]
 
 // Map stage names to job statuses
@@ -46,8 +96,8 @@ export async function runPipeline(
   config: Partial<PipelineConfig> = {}
 ): Promise<void> {
   const cfg: PipelineConfig = {
-    maxRetries: config.maxRetries ?? 3,
-    retryDelay: config.retryDelay ?? 5000,
+    maxRetries: config.maxRetries ?? 0, // Retries handled by BullMQ, not orchestrator
+    retryDelay: config.retryDelay ?? 0,
     cleanupOnFailure: config.cleanupOnFailure ?? true,
     progressCallback: config.progressCallback,
   }
@@ -64,14 +114,17 @@ export async function runPipeline(
     jobId: job.id,
     vodId: job.vodId,
     vodUrl: job.vodUrl,
+    vodTitle: job.title || '',
     userId,
-    settings: job.settings,
+    settings: job.settings || {},
     workDir,
     tempDir,
     outputDir,
     currentStage: 'queued',
-    progress: 0,
+    progress: 0 as number,
+    tempFiles: [],
     filesToCleanup: [workDir], // Clean up entire work directory
+    metadata: {},
   }
 
   try {
@@ -89,6 +142,9 @@ export async function runPipeline(
       await cfg.progressCallback(job.id, 'completed', 100, 'Processing complete')
     }
 
+    // Cleanup temporary files after successful completion
+    await cleanup(context)
+
   } catch (error) {
     console.error(`[orchestrator] Pipeline failed for job ${job.id}:`, error)
 
@@ -100,7 +156,7 @@ export async function runPipeline(
     // Report failure
     if (cfg.progressCallback) {
       const message = error instanceof Error ? error.message : 'Unknown error'
-      await cfg.progressCallback(job.id, 'failed', context.progress, message)
+      await cfg.progressCallback(job.id, 'failed', context.progress ?? 0, message)
     }
 
     // Re-throw to let caller handle
@@ -109,16 +165,14 @@ export async function runPipeline(
 }
 
 /**
- * Execute a single stage with retry logic
+ * Execute a single stage
+ * Note: Retries are handled by BullMQ at the job level, not per-stage
  */
 async function executeStageWithRetry(
   context: PipelineContext,
   stage: PipelineStage,
   config: PipelineConfig
 ): Promise<void> {
-  const maxRetries = stage.retryable ? (stage.maxRetries ?? config.maxRetries) : 0
-  let lastError: Error | undefined
-
   // Update status before stage
   const status = STAGE_TO_STATUS[stage.name] || context.currentStage
   context.currentStage = status
@@ -128,76 +182,64 @@ async function executeStageWithRetry(
   // Report stage start
   if (config.progressCallback) {
     await config.progressCallback(
-      context.jobId,
+      context.jobId!,
       status,
-      context.progress,
+      context.progress!,
       `Starting ${stage.name}...`
     )
   }
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      // Execute stage
-      const result = await stage.execute(context)
+  try {
+    // Execute stage
+    const result = await stage.execute(context)
 
-      // Update context with result
-      Object.assign(context, result)
+    // Update context with result
+    Object.assign(context, result)
 
-      // Report stage progress
-      if (config.progressCallback) {
-        await config.progressCallback(
-          context.jobId,
-          status,
-          context.progress,
-          `${stage.name} completed`
-        )
-      }
-
-      console.log(`[orchestrator] Stage ${stage.name} completed successfully`)
-      return
-
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error))
-
-      console.error(
-        `[orchestrator] Stage ${stage.name} failed (attempt ${attempt + 1}/${maxRetries + 1}):`,
-        lastError
+    // Report stage progress
+    if (config.progressCallback) {
+      await config.progressCallback(
+        context.jobId!,
+        status,
+        context.progress!,
+        `${stage.name} completed`
       )
+    }
 
-      // Call stage error handler if exists
-      if (stage.onError) {
-        try {
-          await stage.onError(context, lastError)
-        } catch (handlerError) {
-          console.error(`[orchestrator] Error handler failed:`, handlerError)
-        }
-      }
+    console.log(`[orchestrator] Stage ${stage.name} completed successfully`)
 
-      // If we have retries left, wait and retry
-      if (attempt < maxRetries) {
-        const delay = config.retryDelay * (attempt + 1) // Exponential backoff
-        console.log(`[orchestrator] Retrying in ${delay}ms...`)
-        await new Promise(resolve => setTimeout(resolve, delay))
+  } catch (error) {
+    const pipelineError = error instanceof Error ? error : new Error(String(error))
+
+    console.error(`[orchestrator] Stage ${stage.name} failed:`, pipelineError)
+
+    // Call stage error handler if exists
+    if (stage.onError) {
+      try {
+        await stage.onError(pipelineError, context)
+      } catch (handlerError) {
+        console.error(`[orchestrator] Error handler failed:`, handlerError)
       }
     }
-  }
 
-  // All retries exhausted
-  throw new PipelineError(
-    `Stage ${stage.name} failed after ${maxRetries + 1} attempts: ${lastError?.message}`,
-    stage.name,
-    context,
-    lastError
-  )
+    // Throw PipelineError for better error context
+    throw new PipelineError(
+      `Stage ${stage.name} failed: ${pipelineError.message}`,
+      stage.name,
+      context,
+      pipelineError
+    )
+  }
 }
 
 /**
  * Cleanup temporary files and directories
  */
 async function cleanup(context: PipelineContext): Promise<void> {
-  console.log(`[orchestrator] Cleaning up ${context.filesToCleanup.length} files/directories`)
+  const filesToCleanup = context.filesToCleanup || []
+  console.log(`[orchestrator] Cleaning up ${filesToCleanup.length} files/directories`)
 
-  for (const filePath of context.filesToCleanup) {
+  for (const filePath of filesToCleanup) {
     try {
       // Check if file/directory exists
       const exists = await Bun.file(filePath).exists() || await directoryExists(filePath)
@@ -232,9 +274,9 @@ async function directoryExists(dirPath: string): Promise<boolean> {
 export function createDatabaseProgressCallback(
   updateJobFn: (jobId: string, updates: Partial<ProcessingJob>) => Promise<void>
 ): PipelineConfig['progressCallback'] {
-  return async (jobId: string, status: JobStatus, progress: number, currentStep: string) => {
+  return async (jobId: string, status: string, progress: number, currentStep: string) => {
     await updateJobFn(jobId, {
-      status,
+      status: status as JobStatus,
       progress,
       currentStep,
       updatedAt: new Date().toISOString(),
@@ -274,19 +316,21 @@ export async function resumePipeline(
     vodId: job.vodId,
     vodUrl: job.vodUrl,
     userId,
-    settings: job.settings,
+    settings: job.settings || {},
     workDir,
     tempDir,
     outputDir,
     currentStage: job.status,
     progress: job.progress,
+    tempFiles: [],
     filesToCleanup: [workDir],
+    metadata: {},
   }
 
   // Execute remaining stages
   const cfg: PipelineConfig = {
-    maxRetries: config.maxRetries ?? 3,
-    retryDelay: config.retryDelay ?? 5000,
+    maxRetries: config.maxRetries ?? 0, // Retries handled by BullMQ, not orchestrator
+    retryDelay: config.retryDelay ?? 0,
     cleanupOnFailure: config.cleanupOnFailure ?? true,
     progressCallback: config.progressCallback,
   }
@@ -307,7 +351,7 @@ export async function resumePipeline(
 
     if (cfg.progressCallback) {
       const message = error instanceof Error ? error.message : 'Unknown error'
-      await cfg.progressCallback(job.id, 'failed', context.progress, message)
+      await cfg.progressCallback(job.id, 'failed', context.progress ?? 0, message)
     }
 
     throw error

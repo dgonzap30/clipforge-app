@@ -3,12 +3,16 @@ import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { prettyJSON } from 'hono/pretty-json'
 
+import { validateEnv } from './lib/env'
 import { authRoutes } from './routes/auth'
 import { vodsRoutes } from './routes/vods'
 import { clipsRoutes } from './routes/clips'
 import { jobsRoutes } from './routes/jobs'
-import { vodWorker, closeWorker } from './queue/worker'
+import { vodWorker as _vodWorker, closeWorker } from './queue/worker'
 import { redisConnection } from './queue/connection'
+
+// Validate environment variables on startup
+validateEnv()
 
 const app = new Hono()
 

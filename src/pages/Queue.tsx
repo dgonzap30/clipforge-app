@@ -1,29 +1,19 @@
 import { useState } from 'react'
-import { Plus, Play, Pause, X, ExternalLink, RefreshCw, Trash2, AlertCircle } from 'lucide-react'
+import { Plus, Pause, X, ExternalLink, RefreshCw, Trash2, AlertCircle } from 'lucide-react'
 import { useJobs } from '@/hooks/useJobs'
 import { VodBrowserModal } from '@/components/queue/VodBrowserModal'
-import { VOD } from '@/lib/api'
+import { ProcessingJob } from '@/lib/api'
 
 export function Queue() {
-  const { jobs, loading, error, createJob, cancelJob, retryJob, deleteJob } = useJobs()
+  const { jobs, loading, error, cancelJob, retryJob, deleteJob } = useJobs()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const handleSelectVod = async (vod: VOD) => {
-    try {
-      setActionError(null)
-      await createJob({
-        vodId: vod.id,
-        vodUrl: vod.url,
-        title: vod.title,
-        channelLogin: vod.streamId || 'unknown',
-        duration: vod.duration,
-      })
-    } catch (err) {
-      console.error('Failed to create job:', err)
-      setActionError(err instanceof Error ? err.message : 'Failed to create job')
-    }
+  const handleJobCreated = (job: ProcessingJob) => {
+    // Job has been created, jobs list will auto-refresh via TanStack Query
+    console.log('Job created:', job.id)
+    setIsModalOpen(false)
   }
 
   const handleCancel = async (id: string) => {
@@ -85,10 +75,6 @@ export function Queue() {
 
   const isProcessing = (status: string) => {
     return ['downloading', 'analyzing', 'extracting', 'reframing', 'captioning'].includes(status)
-  }
-
-  const isTerminal = (status: string) => {
-    return ['completed', 'failed'].includes(status)
   }
 
   return (
@@ -291,7 +277,7 @@ export function Queue() {
       <VodBrowserModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSelectVod={handleSelectVod}
+        onJobCreated={handleJobCreated}
       />
     </div>
   )

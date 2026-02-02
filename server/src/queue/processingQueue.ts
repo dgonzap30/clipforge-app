@@ -41,18 +41,6 @@ processingQueue.on('waiting', (job) => {
   console.log(`Job ${job.id} is waiting`)
 })
 
-processingQueue.on('active', (job) => {
-  console.log(`Job ${job.id} has started`)
-})
-
-processingQueue.on('completed', (job) => {
-  console.log(`Job ${job.id} has completed`)
-})
-
-processingQueue.on('failed', (job, err) => {
-  console.log(`Job ${job?.id} has failed with error: ${err.message}`)
-})
-
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   await processingQueue.close()

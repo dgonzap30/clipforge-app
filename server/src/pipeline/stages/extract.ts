@@ -7,23 +7,7 @@
 
 import { PipelineContext, PipelineStage } from '../types'
 import { extractClipsBatch, ExtractedClip } from '../../extraction/clipper'
-import { nanoid } from 'nanoid'
-
-// TODO: Import from server/src/lib/supabase.ts when it exists
-// For now, we'll define a minimal interface
-interface SupabaseClient {
-  from(table: string): {
-    insert(data: any): Promise<{ data: any; error: any }>
-    update(data: any): Promise<{ data: any; error: any }>
-  }
-}
-
-// Placeholder for Supabase client - will be replaced with actual import
-let supabase: SupabaseClient | null = null
-
-export function initializeSupabaseClient(client: SupabaseClient) {
-  supabase = client
-}
+import { supabase } from '../../lib/supabase'
 
 export interface ExtractStageConfig {
   maxConcurrent?: number
@@ -42,11 +26,12 @@ export class ExtractStage implements PipelineStage {
   constructor(private config: ExtractStageConfig = {}) {}
 
   async execute(context: PipelineContext): Promise<PipelineContext> {
-    const { jobId, userId, vodId, vodPath, outputDir, moments } = context
+    const { jobId, userId, vodId, outputDir, moments } = context
+    const vodPath = context.downloadedVideoPath || context.vodPath
 
     // Validate required context
     if (!vodPath) {
-      throw new Error('Extract stage requires vodPath in context')
+      throw new Error('Extract stage requires vodPath or downloadedVideoPath in context')
     }
 
     if (!moments || moments.length === 0) {
@@ -57,10 +42,22 @@ export class ExtractStage implements PipelineStage {
       throw new Error('Extract stage requires outputDir in context')
     }
 
+    if (!jobId) {
+      throw new Error('Extract stage requires jobId in context')
+    }
+
+    if (!userId) {
+      throw new Error('Extract stage requires userId in context')
+    }
+
+    if (!vodId) {
+      throw new Error('Extract stage requires vodId in context')
+    }
+
     // Extract clips using clipper.ts
     const extractedClips = await extractClipsBatch(
-      vodPath,
-      outputDir,
+      vodPath!,
+      outputDir!,
       moments,
       {
         maxConcurrent: this.config.maxConcurrent || 2,
@@ -70,7 +67,7 @@ export class ExtractStage implements PipelineStage {
     )
 
     // Create clip records in Supabase database
-    const clipRecords = await this.createClipRecords(
+    await this.createClipRecords(
       extractedClips,
       jobId,
       userId,
@@ -81,7 +78,11 @@ export class ExtractStage implements PipelineStage {
     // Return updated context with extracted clips
     return {
       ...context,
-      extractedClips,
+      extractedClips: extractedClips.map((clip, idx) => ({
+        ...clip,
+        clipId: clip.id || `clip-${idx}`,
+      })),
+      extractedClipsDir: outputDir!,
     }
   }
 
@@ -93,14 +94,8 @@ export class ExtractStage implements PipelineStage {
     jobId: string,
     userId: string,
     vodId: string,
-    context: PipelineContext
+    _context: PipelineContext
   ): Promise<any[]> {
-    // If Supabase client is not initialized, skip database insertion
-    // This allows the stage to work in isolation for testing
-    if (!supabase) {
-      console.warn('Supabase client not initialized, skipping clip record creation')
-      return []
-    }
 
     const clipRecords = extractedClips.map((clip) => ({
       id: clip.id,
@@ -110,10 +105,8 @@ export class ExtractStage implements PipelineStage {
       title: clip.moment.suggestedTitle || 'Untitled Clip',
       start_time: clip.startTime,
       end_time: clip.endTime,
-      duration: clip.duration,
       status: 'processing',
       hyde_score: clip.moment.score,
-      confidence: clip.moment.confidence,
       signals: {
         chat: clip.moment.signals.chat,
         audio: clip.moment.signals.audio,

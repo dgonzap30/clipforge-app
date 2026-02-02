@@ -1,4 +1,3 @@
-import { ConnectionOptions } from 'bullmq'
 import IORedis from 'ioredis'
 import { env } from '../lib/env'
 

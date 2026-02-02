@@ -7,7 +7,7 @@
 import { PipelineContext, PipelineStage } from '../types'
 import { uploadFile, getSignedUrl, BUCKETS } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
-import { existsSync, statSync } from 'fs'
+import { existsSync } from 'fs'
 import { basename } from 'path'
 
 export interface UploadStageOptions {
@@ -65,13 +65,16 @@ export async function uploadStage(
 
       // Upload video file
       console.log(`Uploading video for clip ${clip.clipId}...`)
-      const videoUploadResult = await uploadFile({
-        bucket: BUCKETS.CLIPS,
-        path: videoStoragePath,
-        file: videoPath,
-        contentType: 'video/mp4',
-        cacheControl: '31536000', // 1 year
-      })
+      const videoUploadResult = await uploadFile(
+        videoPath,
+        BUCKETS.CLIPS,
+        videoStoragePath,
+        'video/mp4'
+      )
+
+      if (!videoUploadResult.success || !videoUploadResult.path) {
+        throw new Error(`Video upload failed: ${videoUploadResult.error}`)
+      }
 
       // Find and upload thumbnail
       let thumbnailUploadResult
@@ -79,38 +82,46 @@ export async function uploadStage(
 
       if (thumbnailPath && existsSync(thumbnailPath)) {
         console.log(`Uploading thumbnail for clip ${clip.clipId}...`)
-        thumbnailUploadResult = await uploadFile({
-          bucket: BUCKETS.CLIPS,
-          path: thumbnailStoragePath,
-          file: thumbnailPath,
-          contentType: 'image/jpeg',
-          cacheControl: '31536000',
-        })
+        thumbnailUploadResult = await uploadFile(
+          thumbnailPath,
+          BUCKETS.CLIPS,
+          thumbnailStoragePath,
+          'image/jpeg'
+        )
       }
 
       // Generate URLs
-      const videoUrl = await getSignedUrl(
+      const videoUrlResult = await getSignedUrl(
         BUCKETS.CLIPS,
-        videoUploadResult.fullPath,
+        videoUploadResult.path,
         signedUrlExpiry
       )
 
-      const thumbnailUrl = thumbnailUploadResult
-        ? await getSignedUrl(BUCKETS.CLIPS, thumbnailUploadResult.fullPath, signedUrlExpiry)
-        : undefined
+      if (!videoUrlResult.success || !videoUrlResult.url) {
+        throw new Error(`Failed to generate signed URL: ${videoUrlResult.error}`)
+      }
+
+      let thumbnailUrl: string | undefined
+      if (thumbnailUploadResult?.success && thumbnailUploadResult.path) {
+        const thumbnailUrlResult = await getSignedUrl(
+          BUCKETS.CLIPS,
+          thumbnailUploadResult.path,
+          signedUrlExpiry
+        )
+        thumbnailUrl = thumbnailUrlResult.success ? thumbnailUrlResult.url : undefined
+      }
 
       // Update clip record in database
       const clipData = {
-        id: clip.clipId,
-        job_id: context.jobId,
-        user_id: context.userId,
-        vod_id: context.vodId,
-        title: extractClipTitle(context.vodTitle, i),
-        video_path: videoUploadResult.fullPath,
-        thumbnail_path: thumbnailUploadResult?.fullPath,
-        status: 'ready',
-        duration: calculateDuration(context.extractedClips, clip.clipId),
-        hyde_score: getClipHydeScore(context.moments, clip.clipId, context.extractedClips),
+        id: clip.clipId!,
+        job_id: context.jobId!,
+        user_id: context.userId!,
+        vod_id: context.vodId!,
+        title: extractClipTitle(context.vodTitle || 'Clip', i),
+        video_path: videoUploadResult.path,
+        thumbnail_path: thumbnailUploadResult?.path,
+        status: 'ready' as const,
+        hyde_score: getClipHydeScore(context.moments, clip.clipId!, context.extractedClips),
         updated_at: new Date().toISOString(),
       }
 
@@ -124,10 +135,10 @@ export async function uploadStage(
       }
 
       uploadedClips.push({
-        clipId: clip.clipId,
-        videoPath: videoUploadResult.fullPath,
-        thumbnailPath: thumbnailUploadResult?.fullPath || '',
-        videoUrl,
+        clipId: clip.clipId!,
+        videoPath: videoUploadResult.path!,
+        thumbnailPath: thumbnailUploadResult?.path || '',
+        videoUrl: videoUrlResult.url!,
         thumbnailUrl: thumbnailUrl || '',
       })
 
@@ -215,7 +226,7 @@ export function createUploadStage(options: UploadStageOptions = {}): PipelineSta
     execute: async (context: PipelineContext) => {
       return await uploadStage(context, options)
     },
-    cleanup: async (context: PipelineContext) => {
+    cleanup: async (_context: PipelineContext) => {
       // Cleanup is handled by the orchestrator
       // This stage doesn't need to clean up uploaded files
       console.log('Upload stage cleanup - no action needed')

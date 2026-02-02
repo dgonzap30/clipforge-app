@@ -24,7 +24,6 @@ export function VodBrowserModal({ isOpen, onClose, onJobCreated }: VodBrowserMod
   // Channel and VODs state
   const [channel, setChannel] = useState<ChannelInfo | null>(null)
   const [vods, setVods] = useState<VOD[]>([])
-  const [isLoadingVods, setIsLoadingVods] = useState(false)
   const [vodsError, setVodsError] = useState<string | null>(null)
 
   // Selection state

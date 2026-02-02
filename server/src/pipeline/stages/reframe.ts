@@ -26,7 +26,7 @@ export const reframeStage: PipelineStage = {
     }
 
     // Default to 9:16 for vertical video (TikTok/Shorts/Reels)
-    const targetAspect: AspectRatio = settings.targetAspect || '9:16'
+    const targetAspect: AspectRatio = settings?.targetAspect || '9:16'
 
     // Create output directory for reframed clips
     const reframedClipsDir = extractedClipsDir.replace('/extracted/', '/reframed/')
@@ -89,6 +89,11 @@ export const reframeStage: PipelineStage = {
     return {
       ...context,
       reframedClipsDir,
+      reframedClips: results.map(r => ({
+        path: r.outputPath,
+        originalPath: join(extractedClipsDir, r.file),
+        clipId: r.file.replace(/\.[^.]+$/, ''),
+      })),
       currentStage: 'reframe',
       progress: 60, // Approximately 60% through the pipeline
     }

@@ -90,16 +90,9 @@ export class DownloadStage implements PipelineStage {
           const progress = this.parseProgress(line)
           if (progress && onProgress && progress.percent > lastProgress) {
             lastProgress = progress.percent
-            onProgress(
-              progress.percent,
-              'downloading',
-              {
-                downloadedBytes: progress.downloadedBytes,
-                totalBytes: progress.totalBytes,
-                speed: progress.speed,
-                eta: progress.eta,
-              }
-            )
+            // Note: onProgress signature is 4 params (jobId, status, progress, message)
+            // But we don't have jobId in this context, so skip progress reporting here
+            // The orchestrator handles progress reporting
           }
 
           // Check for destination file
@@ -143,10 +136,7 @@ export class DownloadStage implements PipelineStage {
         throw new Error('Download completed but output file not found')
       }
 
-      // Final progress callback
-      if (onProgress) {
-        onProgress(100, 'downloaded', { path: downloadedPath })
-      }
+      // Note: Final progress is handled by orchestrator, not by individual stages
 
       // Update context
       return {

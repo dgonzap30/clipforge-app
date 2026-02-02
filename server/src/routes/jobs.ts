@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { nanoid } from 'nanoid'
 import { supabase } from '../lib/supabase'
 import { requireAuth } from '../middleware/auth'
 
@@ -16,7 +15,8 @@ export type JobStatus = 'queued' | 'downloading' | 'analyzing' | 'extracting' | 
 export interface ProcessingJob {
   id: string
   user_id: string
-  vodId: string
+  vodId: string // DB UUID FK to vods table
+  twitchVodId: string // Twitch's video ID string
   vodUrl: string
   title: string
   channelLogin: string
@@ -25,7 +25,6 @@ export interface ProcessingJob {
   progress: number // 0-100
   currentStep: string
   clipsFound: number
-  clipIds: string[]
   error?: string
   createdAt: string
   updatedAt: string
@@ -47,15 +46,15 @@ interface JobRow {
   id: string
   user_id: string
   vod_id: string
+  twitch_vod_id: string
   vod_url: string
   title: string
   channel_login: string
-  duration: number
+  vod_duration: number
   status: JobStatus
   progress: number
   current_step: string
   clips_found: number
-  clip_ids: string[]
   error?: string
   created_at: string
   updated_at: string
@@ -69,15 +68,15 @@ function rowToJob(row: JobRow): ProcessingJob {
     id: row.id,
     user_id: row.user_id,
     vodId: row.vod_id,
+    twitchVodId: row.twitch_vod_id,
     vodUrl: row.vod_url,
     title: row.title,
     channelLogin: row.channel_login,
-    duration: row.duration,
+    duration: row.vod_duration,
     status: row.status,
     progress: row.progress,
     currentStep: row.current_step,
     clipsFound: row.clips_found,
-    clipIds: row.clip_ids,
     error: row.error,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -155,6 +154,17 @@ jobsRoutes.post('/', zValidator('json', createJobSchema), async (c) => {
   const userId = c.get('userId')
   const input = c.req.valid('json')
 
+  // vodId is now the DB UUID - lookup the vod to get twitch_vod_id
+  const { data: vodData, error: vodError } = await supabase
+    .from('vods')
+    .select('twitch_vod_id')
+    .eq('id', input.vodId)
+    .single()
+
+  if (vodError || !vodData) {
+    return c.json({ error: 'VOD not found' }, 404)
+  }
+
   // Check for duplicate VOD being processed
   const { data: existingJobs } = await supabase
     .from('jobs')
@@ -171,22 +181,22 @@ jobsRoutes.post('/', zValidator('json', createJobSchema), async (c) => {
     }, 409)
   }
 
-  const jobId = nanoid()
+  const jobId = crypto.randomUUID()
   const now = new Date().toISOString()
 
   const jobRow: JobRow = {
     id: jobId,
     user_id: userId,
-    vod_id: input.vodId,
+    vod_id: input.vodId, // DB UUID FK
+    twitch_vod_id: vodData.twitch_vod_id,
     vod_url: input.vodUrl,
     title: input.title,
     channel_login: input.channelLogin,
-    duration: input.duration,
+    vod_duration: input.duration,
     status: 'queued',
     progress: 0,
     current_step: 'Waiting in queue...',
     clips_found: 0,
-    clip_ids: [],
     created_at: now,
     updated_at: now,
     settings: {
@@ -212,22 +222,17 @@ jobsRoutes.post('/', zValidator('json', createJobSchema), async (c) => {
     return c.json({ error: 'Failed to create job' }, 500)
   }
 
-  // TODO: Add to BullMQ queue for processing
-  // await processingQueue.add('process-vod', { jobId })
-
-  // For now, simulate processing start
-  setTimeout(async () => {
-    await supabase
-      .from('jobs')
-      .update({
-        status: 'downloading',
-        progress: 5,
-        current_step: 'Downloading VOD...',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', jobId)
-      .eq('user_id', userId)
-  }, 1000)
+  // Add to BullMQ queue for processing
+  const { processingQueue } = await import('../queue/processingQueue')
+  await processingQueue.add('process-vod', {
+    jobId,
+    vodId: input.vodId, // Pass DB UUID to pipeline
+    vodUrl: input.vodUrl,
+    title: input.title,
+    channelLogin: input.channelLogin,
+    duration: input.duration,
+    settings: jobRow.settings,
+  })
 
   return c.json(rowToJob(data as JobRow), 201)
 })
@@ -238,7 +243,6 @@ jobsRoutes.patch('/:id', zValidator('json', z.object({
   progress: z.number().min(0).max(100).optional(),
   currentStep: z.string().optional(),
   clipsFound: z.number().optional(),
-  clipIds: z.array(z.string()).optional(),
   error: z.string().optional(),
 })), async (c) => {
   const userId = c.get('userId')
@@ -271,7 +275,6 @@ jobsRoutes.patch('/:id', zValidator('json', z.object({
   if (updates.progress !== undefined) updateData.progress = updates.progress
   if (updates.currentStep !== undefined) updateData.current_step = updates.currentStep
   if (updates.clipsFound !== undefined) updateData.clips_found = updates.clipsFound
-  if (updates.clipIds !== undefined) updateData.clip_ids = updates.clipIds
   if (updates.error !== undefined) updateData.error = updates.error
 
   const { data, error } = await supabase
@@ -332,7 +335,24 @@ jobsRoutes.post('/:id/cancel', async (c) => {
     return c.json({ error: 'Failed to cancel job' }, 500)
   }
 
-  // TODO: Cancel actual processing in BullMQ
+  // Cancel actual processing in BullMQ
+  try {
+    const { processingQueue } = await import('../queue/processingQueue')
+
+    // Find the BullMQ job by searching through active/waiting/delayed jobs
+    const jobs = await processingQueue.getJobs(['active', 'waiting', 'delayed', 'paused'])
+    const bullmqJob = jobs.find(j => j.data.jobId === id)
+
+    if (bullmqJob) {
+      await bullmqJob.remove()
+      console.log(`[jobs] Cancelled BullMQ job for jobId: ${id}`)
+    } else {
+      console.warn(`[jobs] BullMQ job not found for jobId: ${id} (may have already completed)`)
+    }
+  } catch (bullmqError) {
+    console.error('[jobs] Failed to cancel BullMQ job:', bullmqError)
+    // Continue anyway since DB is already updated
+  }
 
   return c.json(rowToJob(data as JobRow))
 })
@@ -380,7 +400,33 @@ jobsRoutes.post('/:id/retry', async (c) => {
     return c.json({ error: 'Failed to retry job' }, 500)
   }
 
-  // TODO: Re-add to BullMQ queue
+  // Re-add to BullMQ queue
+  try {
+    const { processingQueue } = await import('../queue/processingQueue')
+    await processingQueue.add('process-vod', {
+      jobId: id,
+      vodId: job.vod_id,
+      vodUrl: job.vod_url,
+      title: job.title,
+      channelLogin: job.channel_login,
+      duration: job.vod_duration,
+      settings: job.settings,
+    })
+    console.log(`[jobs] Re-queued job ${id} to BullMQ`)
+  } catch (bullmqError) {
+    console.error('[jobs] Failed to re-queue job to BullMQ:', bullmqError)
+    // Rollback DB status
+    await supabase
+      .from('jobs')
+      .update({
+        status: 'failed' as JobStatus,
+        error: 'Failed to re-queue job',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+
+    return c.json({ error: 'Failed to re-queue job for processing' }, 500)
+  }
 
   return c.json(rowToJob(data as JobRow))
 })

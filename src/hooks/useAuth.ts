@@ -28,15 +28,24 @@ export function useAuth() {
     if (session?.user) {
       // Extract Twitch user ID from metadata if available
       const twitchUserId = session.user.user_metadata?.provider_id || session.user.id
+      const metadata = session.user.user_metadata || {}
 
       setUser({
         id: twitchUserId,
+        displayName: metadata.full_name || metadata.name || null,
+        login: metadata.preferred_username || metadata.user_name || null,
+        avatarUrl: metadata.avatar_url || metadata.picture || null,
+        email: metadata.email || session.user.email || null,
         twitchConnected: true,
       })
       setLoading(false)
     } else {
       setUser({
         id: null,
+        displayName: null,
+        login: null,
+        avatarUrl: null,
+        email: null,
         twitchConnected: false,
       })
       setLoading(false)
@@ -77,7 +86,7 @@ export function useAuth() {
       const { error: signInError } = await supabase.auth.signInWithOAuth({
         provider: 'twitch',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       })
 

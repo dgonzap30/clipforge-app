@@ -116,13 +116,24 @@ export async function download(options: DownloadOptions): Promise<DownloadResult
  * Get a signed URL for a file in a Supabase Storage bucket
  * @param expiresIn - Duration in seconds until the URL expires (default: 3600 = 1 hour)
  */
-export async function getSignedUrl(options: SignedUrlOptions): Promise<SignedUrlResult> {
-  const { bucket, path, expiresIn = 3600 } = options
+export async function getSignedUrl(options: SignedUrlOptions): Promise<SignedUrlResult>
+export async function getSignedUrl(bucket: BucketName, path: string, expiresIn?: number): Promise<SignedUrlResult>
+export async function getSignedUrl(
+  bucketOrOptions: BucketName | SignedUrlOptions,
+  path?: string,
+  expiresIn = 3600
+): Promise<SignedUrlResult> {
+  // Handle both overloads
+  const options: SignedUrlOptions = typeof bucketOrOptions === 'string'
+    ? { bucket: bucketOrOptions, path: path!, expiresIn }
+    : bucketOrOptions
+
+  const { bucket, path: storagePath, expiresIn: expires = 3600 } = options
 
   try {
     const { data, error } = await supabase.storage
       .from(bucket)
-      .createSignedUrl(path, expiresIn)
+      .createSignedUrl(storagePath, expires)
 
     if (error) {
       return {
@@ -215,4 +226,55 @@ export function getPublicUrl(bucket: BucketName, path: string): string {
     .getPublicUrl(path)
 
   return data.publicUrl
+}
+
+/**
+ * Upload a file from a file path (convenience wrapper for Bun)
+ * Reads the file from disk and uploads it to storage
+ */
+export async function uploadFile(
+  filePath: string,
+  bucket: BucketName,
+  storagePath: string,
+  contentType?: string
+): Promise<UploadResult> {
+  try {
+    const file = Bun.file(filePath)
+    const buffer = await file.arrayBuffer()
+
+    return upload({
+      bucket,
+      path: storagePath,
+      file: Buffer.from(buffer),
+      contentType: contentType || file.type,
+    })
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to read file',
+    }
+  }
+}
+
+/**
+ * Clips namespace for clip-specific storage operations
+ */
+export const clips = {
+  /**
+   * Get a signed URL for a clip
+   */
+  async getSignedUrl(path: string, expiresIn = 3600): Promise<SignedUrlResult> {
+    return getSignedUrl({
+      bucket: BUCKETS.CLIPS,
+      path,
+      expiresIn,
+    })
+  },
+
+  /**
+   * Delete a clip from storage
+   */
+  async delete(path: string): Promise<{ success: boolean; error?: string }> {
+    return deleteFile(BUCKETS.CLIPS, path)
+  },
 }

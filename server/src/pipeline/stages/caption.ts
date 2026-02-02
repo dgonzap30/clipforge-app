@@ -164,7 +164,7 @@ export async function captionStageWithAPI(
   outputDir: string,
   apiKey: string,
   options?: {
-    model?: CaptionConfig['transcription']['model']
+    model?: 'tiny' | 'base' | 'small' | 'medium' | 'large'
     language?: string
     styling?: CaptionConfig['styling']
   }
@@ -195,7 +195,7 @@ export async function captionStageWithLocal(
   videoPath: string,
   outputDir: string,
   options?: {
-    model?: CaptionConfig['transcription']['model']
+    model?: 'tiny' | 'base' | 'small' | 'medium' | 'large'
     language?: string
     styling?: CaptionConfig['styling']
   }
