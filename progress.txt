@@ -1,0 +1,17 @@
+Task: Update src/pages/Connect.tsx
+
+Completed:
+- Installed @supabase/supabase-js package
+- Created src/lib/supabase.ts with frontend Supabase client initialization
+- Updated src/pages/Connect.tsx:
+  - Imported supabase client
+  - Added handleTwitchLogin function that calls supabase.auth.signInWithOAuth() with 'twitch' provider
+  - Wired the Twitch OAuth button to handleTwitchLogin onClick handler
+  - Removed the email signup section (divider and email input/button)
+  - Kept Terms of Service/Privacy Policy links
+- Build verified successfully
+
+Changes made in:
+- package.json (added @supabase/supabase-js dependency)
+- src/lib/supabase.ts (new file)
+- src/pages/Connect.tsx (modified)
