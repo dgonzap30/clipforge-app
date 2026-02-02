@@ -7,14 +7,21 @@ import { authRoutes } from './routes/auth'
 import { vodsRoutes } from './routes/vods'
 import { clipsRoutes } from './routes/clips'
 import { jobsRoutes } from './routes/jobs'
+import { worker, stopWorker } from './queue/worker'
+import { closeRedisConnection } from './queue/connection'
 
 const app = new Hono()
+
+// Parse CORS origins from environment variable
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+  : ['http://localhost:3000', 'http://localhost:5173']
 
 // Middleware
 app.use('*', logger())
 app.use('*', prettyJSON())
 app.use('*', cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'],
+  origin: corsOrigins,
   credentials: true,
 }))
 
@@ -51,6 +58,29 @@ app.notFound((c) => {
 const port = process.env.PORT || 8787
 
 console.log(`🔥 ClipForge API running on http://localhost:${port}`)
+
+// Graceful shutdown handler
+async function gracefulShutdown(signal: string) {
+  console.log(`\n${signal} received, shutting down gracefully...`)
+
+  try {
+    // Stop accepting new jobs
+    await stopWorker()
+
+    // Close Redis connection
+    await closeRedisConnection()
+
+    console.log('Shutdown complete')
+    process.exit(0)
+  } catch (error) {
+    console.error('Error during shutdown:', error)
+    process.exit(1)
+  }
+}
+
+// Register shutdown handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 
 export default {
   port,

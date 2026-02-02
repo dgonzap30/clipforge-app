@@ -1,0 +1,44 @@
+Task: Update server/src/index.ts - import and start BullMQ worker, add graceful shutdown handler, read CORS origins from env var
+
+Completed:
+
+1. Created server/src/queue/connection.ts
+   - Redis connection factory for BullMQ
+   - Singleton pattern with getRedisConnection() and closeRedisConnection()
+   - Configured with maxRetriesPerRequest: null for BullMQ compatibility
+   - Added error and connection event handlers
+
+2. Created server/src/queue/processingQueue.ts
+   - BullMQ Queue instance named 'vod-processing'
+   - Uses Redis connection from connection.ts
+   - Configured with retry logic (3 attempts with exponential backoff)
+   - Job retention settings (100 completed, 500 failed)
+   - ProcessingJobData interface with jobId field
+
+3. Created server/src/queue/worker.ts
+   - BullMQ Worker for processing VOD jobs
+   - Concurrency set to 1 (processes one job at a time)
+   - Event handlers for ready, active, completed, failed, and error events
+   - stopWorker() function for graceful shutdown
+   - Placeholder for runPipeline integration (to be added when orchestrator is implemented)
+
+4. Updated server/src/index.ts
+   - Imported worker and stopWorker from ./queue/worker
+   - Imported closeRedisConnection from ./queue/connection
+   - Added CORS_ORIGINS environment variable parsing (comma-separated list)
+   - Falls back to default origins if CORS_ORIGINS is not set
+   - Added gracefulShutdown() function that:
+     * Stops the BullMQ worker
+     * Closes Redis connection
+     * Exits process cleanly
+   - Registered SIGTERM and SIGINT handlers for graceful shutdown
+
+5. Updated server/.env.example
+   - Added CORS_ORIGINS configuration with example values
+   - Documented as comma-separated list of allowed origins
+
+Implementation details:
+- Worker automatically starts when index.ts is imported
+- CORS origins default to http://localhost:3000 and http://localhost:5173 if not configured
+- Graceful shutdown ensures no jobs are interrupted and connections are properly closed
+- All queue infrastructure files are properly typed with TypeScript
