@@ -1,0 +1,25 @@
+# Progress Log
+
+## Task: Wire ProcessingQueue component to accept jobs prop
+
+### Changes Made:
+1. Updated ProcessingQueue.tsx to accept jobs array as a prop instead of using hardcoded data
+   - Added ProcessingQueueProps interface with jobs: ProcessingJob[] property
+   - Imported ProcessingJob type from @/lib/api
+   - Replaced hardcoded processingItems array with jobs prop
+   - Updated component to render from jobs prop (mapping over jobs instead of processingItems)
+   - Maintained all existing functionality including:
+     - Loading spinner for jobs with progress > 0
+     - Progress bar visualization
+     - Empty state message when no jobs are present
+
+### Files Modified:
+- src/components/dashboard/ProcessingQueue.tsx
+
+### Breaking Change:
+- ProcessingQueue component now requires a `jobs` prop of type ProcessingJob[]
+- Parent components (like Dashboard.tsx) will need to pass the jobs array to this component
+
+### Next Steps:
+- Parent component (Dashboard.tsx) will need to be updated to fetch jobs and pass them as prop
+- This enables the component to display real processing job data instead of mock data
