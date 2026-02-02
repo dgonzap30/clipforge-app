@@ -1,8 +1,23 @@
 /**
  * Transcription Module
- * 
+ *
  * Generates captions using Whisper (local or API).
  */
+
+/**
+ * Default filler words to remove from transcriptions
+ */
+const DEFAULT_FILLER_WORDS = [
+  'um', 'uh', 'umm', 'uhh',
+  'like', 'you know', 'i mean',
+  'sort of', 'kind of',
+  'basically', 'actually', 'literally'
+]
+
+/**
+ * Minimum gap duration (in seconds) to preserve as a natural pause
+ */
+const NATURAL_PAUSE_THRESHOLD = 1.0
 
 export interface TranscriptionWord {
   word: string
@@ -29,6 +44,8 @@ export interface TranscribeConfig {
   model?: 'tiny' | 'base' | 'small' | 'medium' | 'large'
   language?: string
   wordTimestamps?: boolean
+  removeFillers?: boolean
+  customFillerWords?: string[]
 }
 
 /**
@@ -68,9 +85,9 @@ export async function transcribeWithWhisperAPI(
   }
   
   const result = await response.json()
-  
+
   // Transform to our format
-  return {
+  const transcriptionResult: TranscriptionResult = {
     text: result.text,
     segments: result.segments?.map((seg: any) => ({
       text: seg.text,
@@ -86,6 +103,9 @@ export async function transcribeWithWhisperAPI(
     language: result.language || 'en',
     duration: result.duration || 0,
   }
+
+  // Apply filler word removal if enabled
+  return removeFillerWords(transcriptionResult, config)
 }
 
 /**
@@ -117,8 +137,8 @@ export async function transcribeWithLocalWhisper(
   const outputPath = `${outputDir}/${baseName}.json`
   
   const output = await Bun.file(outputPath).json()
-  
-  return {
+
+  const transcriptionResult: TranscriptionResult = {
     text: output.text,
     segments: output.segments?.map((seg: any) => ({
       text: seg.text,
@@ -133,6 +153,102 @@ export async function transcribeWithLocalWhisper(
     })) || [],
     language: output.language || 'en',
     duration: output.duration || 0,
+  }
+
+  // Apply filler word removal if enabled
+  return removeFillerWords(transcriptionResult, config)
+}
+
+/**
+ * Remove filler words from transcription result
+ */
+export function removeFillerWords(
+  result: TranscriptionResult,
+  config: TranscribeConfig = {}
+): TranscriptionResult {
+  if (!config.removeFillers) {
+    return result
+  }
+
+  const fillerWords = config.customFillerWords || DEFAULT_FILLER_WORDS
+  const fillerSet = new Set(fillerWords.map(w => w.toLowerCase().trim()))
+
+  const cleanedSegments: TranscriptionSegment[] = []
+
+  for (const segment of result.segments) {
+    if (!segment.words || segment.words.length === 0) {
+      // Keep segments without word-level timing unchanged
+      cleanedSegments.push(segment)
+      continue
+    }
+
+    const filteredWords: TranscriptionWord[] = []
+    let timeOffset = 0
+
+    for (let i = 0; i < segment.words.length; i++) {
+      const word = segment.words[i]
+      const normalizedWord = word.word.toLowerCase().trim()
+
+      // Check if word is a filler
+      const isFiller = fillerSet.has(normalizedWord)
+
+      // Don't remove if it's after a sentence-ending punctuation (new sentence)
+      const isAfterSentenceEnd = i > 0 && /[.!?]$/.test(segment.words[i - 1].word)
+
+      // Don't remove if word has high confidence (likely stressed/emphasized)
+      // Threshold: 0.95 confidence indicates emphasis
+      const isEmphasized = word.confidence >= 0.95
+
+      const shouldKeep = !isFiller || isAfterSentenceEnd || isEmphasized
+
+      if (!shouldKeep) {
+        // Remove this filler word
+        const nextWord = segment.words[i + 1]
+        if (nextWord) {
+          const gapDuration = nextWord.start - word.end
+
+          // Only add to offset if gap is less than natural pause threshold
+          if (gapDuration < NATURAL_PAUSE_THRESHOLD) {
+            timeOffset += (word.end - word.start)
+          }
+        } else {
+          // Last word in segment, add to offset
+          timeOffset += (word.end - word.start)
+        }
+        continue
+      }
+
+      // Keep this word, adjust timing
+      const adjustedWord: TranscriptionWord = {
+        ...word,
+        start: word.start - timeOffset,
+        end: word.end - timeOffset,
+      }
+
+      filteredWords.push(adjustedWord)
+    }
+
+    // Only add segment if it has words remaining
+    if (filteredWords.length > 0) {
+      // Reconstruct segment text from filtered words
+      const newText = filteredWords.map(w => w.word).join(' ')
+
+      cleanedSegments.push({
+        ...segment,
+        text: newText,
+        words: filteredWords,
+        end: filteredWords[filteredWords.length - 1].end,
+      })
+    }
+  }
+
+  // Reconstruct full text
+  const newFullText = cleanedSegments.map(s => s.text).join(' ')
+
+  return {
+    ...result,
+    text: newFullText,
+    segments: cleanedSegments,
   }
 }
 

@@ -345,3 +345,45 @@ To use this feature in production:
 - Future enhancement: Extract separate facecam and gameplay streams from VOD before reframe stage
 - Future enhancement: Auto-detect gaming content by VOD category to enable split-screen automatically
 - The infrastructure is now in place and ready for when dual source extraction is implemented
+
+---
+
+## Task: Add filler word removal
+
+### Changes Made:
+- Implemented filler word removal functionality in the transcription module
+- Added `removeFillers` and `customFillerWords` configuration options to `TranscribeConfig` interface
+- Created `removeFillerWords()` function that processes transcription results to remove common filler words
+- Integrated filler removal into both `transcribeWithWhisperAPI()` and `transcribeWithLocalWhisper()` functions
+- Implemented smart removal logic that:
+  - Removes default filler words: um, uh, umm, uhh, like, you know, i mean, sort of, kind of, basically, actually, literally
+  - Preserves filler words after sentence-ending punctuation (., !, ?)
+  - Preserves filler words with high confidence (>= 0.95) indicating emphasis
+  - Adjusts timestamps to close gaps < 1 second
+  - Preserves natural pauses > 1 second
+  - Supports custom filler word lists
+- Created comprehensive test suite with 14 test cases covering all edge cases
+
+### Files Modified:
+- server/src/captions/transcribe.ts (added removeFillerWords function and updated TranscribeConfig)
+- server/src/captions/transcribe.test.ts (new file with comprehensive tests)
+
+### Test Results:
+- All 14 tests passing
+- Test coverage includes:
+  - Default filler word removal
+  - Timestamp adjustment
+  - Natural pause preservation
+  - Sentence-start word preservation
+  - Emphasis detection
+  - Custom filler words
+  - Multiple segments handling
+  - Empty segment removal
+  - Case-insensitive matching
+  - Multi-word phrases
+
+### Notes:
+- Feature is opt-in via `removeFillers: true` config flag
+- Default behavior unchanged when flag is not set
+- No new linting errors introduced
+- Implementation follows PRD requirements exactly
