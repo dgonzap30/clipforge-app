@@ -15,17 +15,25 @@ export function useAuth() {
     try {
       setLoading(true)
       setError(null)
-      
+
       const { user: twitchUser, authenticated } = await api.auth.getMe()
-      
+
       if (authenticated && twitchUser) {
         setUser({
           id: twitchUser.id,
+          displayName: twitchUser.display_name,
+          login: twitchUser.login,
+          avatarUrl: twitchUser.profile_image_url,
+          email: twitchUser.email,
           twitchConnected: true,
         })
       } else {
         setUser({
           id: null,
+          displayName: null,
+          login: null,
+          avatarUrl: null,
+          email: null,
           twitchConnected: false,
         })
       }
@@ -34,6 +42,10 @@ export function useAuth() {
       setError(err instanceof Error ? err.message : 'Failed to check auth')
       setUser({
         id: null,
+        displayName: null,
+        login: null,
+        avatarUrl: null,
+        email: null,
         twitchConnected: false,
       })
     } finally {
@@ -50,6 +62,10 @@ export function useAuth() {
       await api.auth.logout()
       setUser({
         id: null,
+        displayName: null,
+        login: null,
+        avatarUrl: null,
+        email: null,
         twitchConnected: false,
         tiktokConnected: false,
         youtubeConnected: false,
