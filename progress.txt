@@ -1,0 +1,6 @@
+Removed hardcoded 'Free Plan' footer section from src/components/layout/Sidebar.tsx
+
+Changes made:
+- Removed the footer section containing the hardcoded "Free Plan" text and "3 clips remaining" counter
+- Simplified the Sidebar component by removing lines 56-62 which contained the footer div with border and plan information
+- The navigation now takes up the full height of the sidebar with flex-1 class
