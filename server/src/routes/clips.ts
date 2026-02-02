@@ -137,6 +137,35 @@ clipsRoutes.get('/:id', async (c) => {
   }
 })
 
+// Get signed URL for clip video
+clipsRoutes.get('/:id/signed-url', (c) => {
+  const id = c.req.param('id')
+  const clip = clips.get(id)
+
+  if (!clip) {
+    return c.json({ error: 'Clip not found' }, 404)
+  }
+
+  if (clip.status !== 'ready') {
+    return c.json({ error: 'Clip not ready for playback' }, 400)
+  }
+
+  // TODO: Generate actual signed URL from S3/R2/storage
+  // For now, return the videoUrl directly (in production this would be a time-limited signed URL)
+  const signedUrl = clip.videoUrl || null
+  const expiresIn = 3600 // 1 hour in seconds
+
+  if (!signedUrl) {
+    return c.json({ error: 'Video URL not available' }, 404)
+  }
+
+  return c.json({
+    url: signedUrl,
+    expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+    expiresIn,
+  })
+})
+
 // Create clip (called by processing pipeline)
 clipsRoutes.post('/', zValidator('json', createClipSchema), async (c) => {
   const user_id = c.get('user_id')

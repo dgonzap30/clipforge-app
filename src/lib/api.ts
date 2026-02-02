@@ -231,11 +231,14 @@ export const clips = {
     body: JSON.stringify({ ids }),
   }),
   
-  bulkExport: (ids: string[], platform: 'tiktok' | 'youtube' | 'instagram') => 
+  bulkExport: (ids: string[], platform: 'tiktok' | 'youtube' | 'instagram') =>
     request<{ exported: string[] }>('/api/clips/bulk/export', {
       method: 'POST',
       body: JSON.stringify({ ids, platform }),
     }),
+
+  getSignedUrl: (id: string) =>
+    request<{ url: string; expiresAt: string; expiresIn: number }>(`/api/clips/${id}/signed-url`),
 }
 
 // Health check
