@@ -1,18 +1,25 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { useStore } from '@/store'
 import { Loader2 } from 'lucide-react'
 
 export function AuthCallback() {
   const navigate = useNavigate()
+  const setUser = useStore((state) => state.setUser)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     handleAuthCallback()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleAuthCallback() {
     try {
+      // Get the platform from query params
+      const queryParams = new URLSearchParams(window.location.search)
+      const platform = queryParams.get('platform') as 'twitch' | 'tiktok' | 'youtube' | null
+
       // Get the auth hash from the URL
       const hashParams = new URLSearchParams(window.location.hash.substring(1))
       const accessToken = hashParams.get('access_token')
@@ -65,8 +72,16 @@ export function AuthCallback() {
         }
       }
 
-      // Success - redirect to dashboard
-      navigate('/', { replace: true })
+      // Update user connection status based on platform
+      if (platform === 'tiktok') {
+        setUser({ tiktokConnected: true })
+      } else if (platform === 'youtube') {
+        setUser({ youtubeConnected: true })
+      }
+      // Twitch connection is handled by useAuth hook
+
+      // Success - redirect to settings if connecting a platform, otherwise dashboard
+      navigate(platform && platform !== 'twitch' ? '/settings' : '/', { replace: true })
     } catch (err) {
       console.error('Auth callback error:', err)
       setError(err instanceof Error ? err.message : 'Authentication failed')

@@ -1,6 +1,7 @@
 import { Save } from 'lucide-react'
 import { useStore, type Settings as SettingsType } from '../store'
 import { useState } from 'react'
+import { PlatformConnection } from '../components/settings/PlatformConnection'
 
 export function Settings() {
   const settings = useStore((state) => state.settings)
@@ -204,47 +205,48 @@ export function Settings() {
       
       {/* Connected Accounts */}
       <section className="card p-6 space-y-6">
-        <h2 className="text-lg font-semibold">Connected Accounts</h2>
-        
+        <div>
+          <h2 className="text-lg font-semibold">Connected Accounts</h2>
+          <p className="text-sm text-dark-400 mt-1">
+            Connect your social media accounts to enable auto-upload and streaming features
+          </p>
+        </div>
+
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-4 bg-dark-800 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center font-bold">
+          <PlatformConnection
+            platform="twitch"
+            name="Twitch"
+            description="For VOD access and streaming"
+            provider="twitch"
+            icon={
+              <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center font-bold text-white">
                 T
               </div>
-              <div>
-                <p className="font-medium">Twitch</p>
-                <p className="text-sm text-dark-400">Not connected</p>
-              </div>
-            </div>
-            <button className="btn-secondary">Connect</button>
-          </div>
-          
-          <div className="flex items-center justify-between p-4 bg-dark-800 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center font-bold">
+            }
+          />
+
+          <PlatformConnection
+            platform="tiktok"
+            name="TikTok"
+            description="For auto-upload to TikTok"
+            icon={
+              <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center font-bold text-white">
                 T
               </div>
-              <div>
-                <p className="font-medium">TikTok</p>
-                <p className="text-sm text-dark-400">For auto-upload</p>
-              </div>
-            </div>
-            <button className="btn-secondary">Connect</button>
-          </div>
-          
-          <div className="flex items-center justify-between p-4 bg-dark-800 rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center font-bold">
+            }
+          />
+
+          <PlatformConnection
+            platform="youtube"
+            name="YouTube"
+            description="For Shorts upload"
+            provider="google"
+            icon={
+              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center font-bold text-white">
                 Y
               </div>
-              <div>
-                <p className="font-medium">YouTube</p>
-                <p className="text-sm text-dark-400">For Shorts upload</p>
-              </div>
-            </div>
-            <button className="btn-secondary">Connect</button>
-          </div>
+            }
+          />
         </div>
       </section>
 
