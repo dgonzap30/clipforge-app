@@ -1,0 +1,217 @@
+tasks:
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 1: Backend + Frontend Package Setup
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Update server/src/lib/env.ts: replace S3 vars with SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, OPENAI_API_KEY"
+    completed: true
+    parallel_group: 1
+  - title: "Update server/package.json: add @supabase/supabase-js, remove @aws-sdk/client-s3 and @aws-sdk/s3-request-presigner, run bun install"
+    completed: true
+    parallel_group: 1
+  - title: "Add @supabase/supabase-js to frontend package.json and run bun install in project root"
+    completed: true
+    parallel_group: 1
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 2: Supabase Client Initialization
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Create server/src/lib/supabase.ts with service_role Supabase client using env.SUPABASE_URL and env.SUPABASE_SERVICE_ROLE_KEY"
+    completed: true
+    parallel_group: 2
+  - title: "Create src/lib/supabase.ts frontend Supabase client using VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY env vars"
+    completed: true
+    parallel_group: 2
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 3: Storage + Backend Auth Middleware
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Create server/src/lib/storage.ts with upload, download, getSignedUrl helpers for Supabase Storage buckets clipforge-clips and clipforge-temp"
+    completed: true
+    parallel_group: 3
+  - title: "Rewrite server/src/routes/auth.ts: replace cookie-based Twitch OAuth with Supabase Auth JWT verification middleware, keep /api/auth/me returning user from supabase.auth.getUser(token)"
+    completed: true
+    parallel_group: 3
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 4: Backend Routes + Frontend Auth Core
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Update server/src/routes/vods.ts: replace cookie-based requireAuth middleware with Supabase JWT Bearer token verification from auth.ts pattern"
+    completed: true
+    parallel_group: 4
+  - title: "Rewrite src/hooks/useAuth.ts to use Supabase Auth: signInWithOAuth for Twitch, signOut, onAuthStateChange listener, remove api.auth dependency"
+    completed: true
+    parallel_group: 4
+  - title: "Update src/lib/api.ts: replace credentials:'include' with Authorization Bearer token from supabase.auth.getSession(), remove auth namespace object"
+    completed: true
+    parallel_group: 4
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 5: Frontend Auth Pages
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Create src/pages/AuthCallback.tsx: handle Supabase OAuth redirect, show loading spinner, redirect to / on success or /connect on failure"
+    completed: true
+    parallel_group: 5
+  - title: "Create src/components/auth/ProtectedRoute.tsx: check Supabase auth session, redirect to /connect if not authenticated, render children if authenticated"
+    completed: true
+    parallel_group: 5
+  - title: "Update src/pages/Connect.tsx: wire Twitch button to supabase.auth.signInWithOAuth({provider:'twitch'}), remove email signup section"
+    completed: true
+    parallel_group: 5
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 6: Routing Integration
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Update src/App.tsx: add /auth/callback route for AuthCallback, wrap authenticated routes with ProtectedRoute component"
+    completed: true
+    parallel_group: 6
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 7: Replace In-Memory Storage with Supabase DB
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Rewrite server/src/routes/jobs.ts: replace in-memory Map with supabase.from('jobs') queries, scope all queries by user_id from auth context, keep same API shape"
+    completed: true
+    parallel_group: 7
+  - title: "Rewrite server/src/routes/clips.ts: replace in-memory Map with supabase.from('clips') queries, scope by user_id, generate signed URLs for video_path and thumbnail_path"
+    completed: true
+    parallel_group: 7
+  - title: "Update server/src/routes/vods.ts: after fetching VODs from Twitch API, upsert them into supabase vods table with user_id"
+    completed: true
+    parallel_group: 7
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 8: Pipeline + Queue Infrastructure
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Create server/src/pipeline/types.ts: define PipelineContext and PipelineStage interfaces for the processing pipeline"
+    completed: true
+    parallel_group: 8
+  - title: "Create server/src/queue/connection.ts: Redis connection factory for BullMQ using env.REDIS_URL"
+    completed: true
+    parallel_group: 8
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 9: Pipeline Stages (All Independent)
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Create server/src/pipeline/stages/download.ts: yt-dlp VOD download stage with progress parsing and PipelineStage interface"
+    completed: true
+    parallel_group: 9
+  - title: "Create server/src/pipeline/stages/analyze.ts: call audio.ts extractAudio/getAudioLevels/analyzeAudioLevels then fusion.ts fuseSignals with weights {chat:0, audio:0.8, clips:0.2}"
+    completed: true
+    parallel_group: 9
+  - title: "Create server/src/pipeline/stages/extract.ts: wrapper around clipper.ts extractClipsBatch, create clip records in Supabase DB"
+    completed: true
+    parallel_group: 9
+  - title: "Create server/src/pipeline/stages/reframe.ts: wrapper around reframe.ts reframeVideo using center crop for MVP"
+    completed: true
+    parallel_group: 9
+  - title: "Create server/src/pipeline/stages/caption.ts: wrapper around transcribe.ts Whisper, generateTikTokASS, and burnCaptions"
+    completed: true
+    parallel_group: 9
+  - title: "Create server/src/pipeline/stages/upload.ts: upload finished clips to Supabase Storage clipforge-clips bucket, update clip records with paths"
+    completed: true
+    parallel_group: 9
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 10: Orchestrator + Queue Definition
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Create server/src/pipeline/orchestrator.ts: stage sequencer that runs download->analyze->extract->reframe->caption->upload with retry, progress reporting to DB, cleanup on failure"
+    completed: true
+    parallel_group: 10
+  - title: "Create server/src/queue/processingQueue.ts: BullMQ Queue named 'vod-processing' using Redis connection from connection.ts"
+    completed: true
+    parallel_group: 10
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 11: BullMQ Worker
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Create server/src/queue/worker.ts: BullMQ Worker with concurrency 1 that calls runPipeline from orchestrator for each job"
+    completed: true
+    parallel_group: 11
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 12: Server Wiring
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Update server/src/index.ts: import and start BullMQ worker, add graceful shutdown handler, read CORS origins from env var"
+    completed: true
+    parallel_group: 12
+  - title: "Update server/src/routes/jobs.ts POST handler: replace setTimeout simulation with processingQueue.add() call to enqueue real jobs"
+    completed: true
+    parallel_group: 12
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 13: Frontend Infrastructure
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Add @tanstack/react-query to frontend package.json, wrap app in QueryClientProvider in src/main.tsx"
+    completed: true
+    parallel_group: 13
+  - title: "Slim down src/store/index.ts: remove Clip and QueueItem types and server state arrays, keep only Settings type and UI-only state"
+    completed: true
+    parallel_group: 13
+  - title: "Create src/components/ui/Modal.tsx: generic portal-based modal component with overlay, close button, and children slot"
+    completed: true
+    parallel_group: 13
+  - title: "Create src/components/ui/LoadingSpinner.tsx: reusable loading spinner component with optional size prop"
+    completed: true
+    parallel_group: 13
+  - title: "Create src/components/ui/EmptyState.tsx: reusable empty state component with icon, title, description, and optional action button"
+    completed: true
+    parallel_group: 13
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 14: Data Fetching Hooks
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Create src/hooks/useClips.ts: TanStack Query hooks for listing, fetching, deleting clips via api.clips endpoints"
+    completed: true
+    parallel_group: 14
+  - title: "Create src/hooks/useVods.ts: TanStack Query hooks for fetching user VODs and channel VODs via api.vods endpoints"
+    completed: true
+    parallel_group: 14
+  - title: "Rewrite src/hooks/useJobs.ts: replace useState/useEffect polling with TanStack Query useQuery with refetchInterval for active jobs"
+    completed: true
+    parallel_group: 14
+  - title: "Create src/hooks/useJobProgress.ts: Supabase Realtime subscription hook that listens to job row changes and returns live progress"
+    completed: true
+    parallel_group: 14
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 15: Component Extraction
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Create src/components/clips/ClipCard.tsx: extracted clip card component with thumbnail, title, duration, status badge, and action buttons"
+    completed: true
+    parallel_group: 15
+  - title: "Create src/components/queue/JobCard.tsx: extracted job card component with progress bar, status, channel info, and cancel/retry actions"
+    completed: true
+    parallel_group: 15
+  - title: "Create src/components/queue/VodBrowserModal.tsx: modal to search Twitch channel, browse VODs, configure processing settings, submit job"
+    completed: true
+    parallel_group: 15
+  - title: "Create src/components/clips/ClipPlayerModal.tsx: video player modal that loads clip signed URL and displays playback controls"
+    completed: false
+    parallel_group: 15
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 16: Page Wiring (All Independent)
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Wire src/pages/Dashboard.tsx: replace hardcoded stats with useClips/useJobs hooks, pass real data to RecentClips and ProcessingQueue"
+    completed: false
+    parallel_group: 16
+  - title: "Wire src/components/dashboard/RecentClips.tsx: accept clips array prop instead of hardcoded data, render from props"
+    completed: false
+    parallel_group: 16
+  - title: "Wire src/components/dashboard/ProcessingQueue.tsx: accept jobs array prop instead of hardcoded data, render from props"
+    completed: false
+    parallel_group: 16
+  - title: "Wire src/pages/Clips.tsx: replace mockClips with useClips hook, add status filter, pagination, wire delete/download actions and ClipPlayerModal"
+    completed: false
+    parallel_group: 16
+  - title: "Wire src/pages/Queue.tsx: replace mockQueue with useJobs hook, wire cancel/retry/delete actions, add VodBrowserModal on Add Stream button"
+    completed: false
+    parallel_group: 16
+  - title: "Wire src/pages/Settings.tsx: make form controlled via Zustand settings state, add save handler that persists to localStorage"
+    completed: false
+    parallel_group: 16
+  - title: "Wire src/components/layout/Header.tsx: show user avatar and display name from useAuth, add dropdown menu with logout action"
+    completed: false
+    parallel_group: 16
+  - title: "Update src/components/layout/Sidebar.tsx: remove hardcoded 'Free Plan' footer section"
+    completed: false
+    parallel_group: 16
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 17: Hooks Barrel Export
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Update src/hooks/index.ts: add exports for useClips, useVods, useJobProgress hooks"
+    completed: false
+    parallel_group: 17
+  # ══════════════════════════════════════════════════════════════════════════
+  # GROUP 18: Deployment Configuration
+  # ══════════════════════════════════════════════════════════════════════════
+  - title: "Create server/Dockerfile: multi-stage build with Bun runtime, FFmpeg, and yt-dlp installed"
+    completed: false
+    parallel_group: 18
+  - title: "Create docker-compose.yml at project root: api service from Dockerfile + redis service, with env var pass-through"
+    completed: false
+    parallel_group: 18

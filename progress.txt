@@ -1,0 +1,73 @@
+## ClipPlayerModal Implementation
+
+### Created Files:
+- `src/components/clips/ClipPlayerModal.tsx` - Video player modal component
+
+### Modified Files:
+- `server/src/routes/clips.ts` - Added signed URL endpoint
+- `src/lib/api.ts` - Added getSignedUrl API method
+
+### Features Implemented:
+
+#### ClipPlayerModal Component:
+1. **Video Player**:
+   - Full HTML5 video player with custom controls
+   - Signed URL fetching for secure video playback
+   - Loading states with spinner
+   - Error handling with user-friendly messages
+   - Status checking (only plays 'ready' clips)
+
+2. **Playback Controls**:
+   - Play/Pause toggle with visual feedback
+   - Seek bar with time display
+   - Volume control with mute toggle
+   - Fullscreen support
+   - Download functionality
+   - Time display (current/total in MM:SS format)
+
+3. **Keyboard Shortcuts**:
+   - Space/K: Play/Pause
+   - Arrow Left/Right: Seek ±5 seconds
+   - M: Mute/Unmute
+   - F: Fullscreen toggle
+   - Esc: Close modal
+
+4. **UI/UX Features**:
+   - Click-to-play/pause on video
+   - Hover-to-show controls
+   - Large play button overlay when paused
+   - Clip metadata display (title, duration, HYDE score, signals)
+   - Keyboard shortcut hints
+   - Modal backdrop with click-to-close
+   - Responsive design
+
+#### Backend API:
+1. **GET /api/clips/:id/signed-url**:
+   - Returns signed URL for secure video access
+   - Includes expiration time (1 hour default)
+   - Validates clip status (must be 'ready')
+   - Error handling for missing/invalid clips
+   - Placeholder for future S3/R2 integration
+
+#### API Client:
+- Added `clips.getSignedUrl(id)` method for frontend access
+
+### Technical Details:
+- Uses React hooks (useRef, useState, useEffect)
+- Proper cleanup of event listeners
+- Keyboard event handling with prevention of default behavior
+- Video element refs for direct API access
+- Type-safe API integration
+- Tailwind CSS for styling with custom theme colors
+
+### Testing:
+- No testing framework currently configured in the project
+- Tests skipped due to lack of test infrastructure
+- Recommend setting up Vitest for future testing
+
+### Next Steps:
+- Integrate modal into Clips page
+- Add S3/R2 signed URL generation in production
+- Consider adding playback speed controls
+- Add caption/subtitle support
+- Implement video quality selection
