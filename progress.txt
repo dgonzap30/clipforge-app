@@ -1,0 +1,20 @@
+Completed: Create src/pages/AuthCallback.tsx
+
+Changes made:
+1. Created src/lib/supabase.ts - Frontend Supabase client with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY env vars
+2. Created src/pages/AuthCallback.tsx - Handles Supabase OAuth redirect with:
+   - Loading spinner during authentication
+   - Proper error handling for OAuth errors
+   - Session extraction from URL hash/query params
+   - Code exchange for session if needed
+   - Redirects to / on success
+   - Redirects to /connect on failure with 2-second delay to show error
+3. Updated src/pages/index.ts - Added AuthCallback export
+4. Updated src/App.tsx - Added /auth/callback route
+
+The AuthCallback page properly handles:
+- OAuth redirect from Supabase
+- Both hash-based and code-based OAuth flows
+- Error states with user-friendly messages
+- Loading states with spinner
+- Automatic redirects to appropriate pages
