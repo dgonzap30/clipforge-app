@@ -1,16 +1,65 @@
-## Task: Update server/src/lib/env.ts
+## Task: Add transition effects for multi-clip compilations
 
 ### Changes Made:
-- Replaced S3-related environment variables with Supabase and OpenAI variables
-- Removed: S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION
-- Added: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, OPENAI_API_KEY
-- Maintained the same structure and format of the env configuration
-- The validateEnv() function remains unchanged (validation requirements will need to be updated in a separate task if needed)
+- Added transition types and configuration to pipeline types system
+- Implemented enhanced concatenation with transition support in clipper module
+- Created new Effects pipeline stage for applying transitions to multi-clip compilations
+- Comprehensive test coverage for all transition types and edge cases
 
 ### Files Modified:
-- server/src/lib/env.ts
+- server/src/pipeline/types.ts - Added TransitionType, TransitionConfig, and CompilationConfig types
+- server/src/extraction/clipper.ts - Added concatenateClipsWithTransitions function with support for cut, flash, zoom-in, and zoom-out transitions
+- server/src/pipeline/stages/effects.ts - New pipeline stage for applying transitions (NEW FILE)
+
+### Files Created:
+- server/src/pipeline/stages/effects.ts - Effects stage implementation
+- server/src/pipeline/stages/effects.test.ts - Comprehensive test suite for effects stage
+- server/src/extraction/clipper.test.ts - Test suite for transition functions
+
+### Implementation Details:
+
+#### Transition Types Supported:
+1. **Cut** - Instant transition (no effect, simple concatenation)
+2. **Flash** - White flash effect between clips using xfade filter
+3. **Zoom-in** - Zoom in effect on transition using xfade filter
+4. **Zoom-out** - Zoom out effect on transition using xfade filter
+
+#### Key Features:
+- Flexible transition configuration per clip boundary
+- Default transition type and duration settings
+- Fallback to simple concatenation when all transitions are 'cut'
+- Single clip optimization (no unnecessary processing)
+- Automatic selection of best available clips (captioned > reframed)
+- File validation before processing
+- Comprehensive error handling
+
+#### FFmpeg Filter Complex:
+The implementation uses FFmpeg's xfade filter for smooth transitions between video clips:
+- Calculates offset times based on clip durations
+- Builds complex filter chains for video transitions
+- Concatenates audio streams separately
+- Outputs high-quality MP4 with h264/aac encoding
+
+#### Testing:
+- 22 tests covering all transition types and configurations
+- Edge case handling (no clips, single clip, missing files)
+- Configuration validation and preference testing
+- All tests passing with 100% success rate
+- Linting clean on all new files
+
+### Integration Points:
+The Effects stage can be added to the pipeline orchestrator between the caption and upload stages:
+1. Download → Analyze → Extract → Reframe → Caption → **Effects** → Upload
+
+### Next Steps for Integration:
+To use this feature in production:
+1. Add EffectsStage to the pipeline orchestrator
+2. Configure transition preferences in job settings
+3. Update upload stage to handle compiled clip if available
+4. Add UI controls for transition selection
 
 ### Notes:
-- The env object now exports Supabase credentials instead of S3-compatible storage credentials
-- OpenAI API key has been added for AI functionality
-- Default values remain empty strings to maintain consistency with other configuration
+- Transitions are applied only when multiple clips are being compiled
+- Single clips bypass the compilation step for efficiency
+- The system gracefully handles missing transition configurations
+- All code follows existing patterns and coding standards

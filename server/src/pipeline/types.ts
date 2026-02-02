@@ -40,6 +40,7 @@ export interface PipelineContext {
   reframedClips?: Array<{ path: string; originalPath: string; clipId?: string }>
   reframedClipsDir?: string
   captionedClips?: Array<{ path: string; originalPath: string; clipId?: string }>
+  compiledClipPath?: string
   uploadedClips?: Array<{
     clipId: string
     videoPath: string
@@ -102,11 +103,25 @@ export interface StageProgress {
   details?: any
 }
 
+export type TransitionType = 'cut' | 'flash' | 'zoom-in' | 'zoom-out'
+
+export interface TransitionConfig {
+  type: TransitionType
+  duration?: number // in seconds
+}
+
+export interface CompilationConfig {
+  transitions?: TransitionConfig[]
+  defaultTransition?: TransitionType
+  transitionDuration?: number
+}
+
 export interface PipelineConfig {
   maxRetries?: number
   retryDelay?: number
   cleanupOnFailure?: boolean
   progressCallback?: (jobId: string, status: string, progress: number, message: string) => Promise<void> | void
+  compilation?: CompilationConfig
 }
 
 export class PipelineError extends Error {
