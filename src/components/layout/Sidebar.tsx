@@ -52,14 +52,6 @@ export function Sidebar() {
           ))}
         </ul>
       </nav>
-      
-      {/* Footer */}
-      <div className="p-4 border-t border-dark-800">
-        <div className="px-4 py-3 rounded-lg bg-dark-800">
-          <p className="text-sm text-dark-400">Free Plan</p>
-          <p className="text-xs text-dark-500 mt-1">3 clips remaining</p>
-        </div>
-      </div>
     </aside>
   )
 }
