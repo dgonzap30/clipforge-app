@@ -1,0 +1,24 @@
+## Task: Create server/src/pipeline/stages/analyze.ts
+
+### Completed
+- Created `server/src/pipeline/stages/` directory structure
+- Implemented `analyze.ts` with full audio processing pipeline:
+  - `analyze()` function that orchestrates the audio analysis workflow
+  - Calls `extractAudio()` to extract audio from video file
+  - Calls `getAudioLevels()` to analyze audio amplitude data
+  - Calls `analyzeAudioLevels()` to detect audio moments (peaks, sustained, silence breaks)
+  - Calls `fuseSignals()` with configured weights: {chat: 0, audio: 0.8, clips: 0.2}
+  - Returns both raw audio moments and fused signal moments
+  - Added convenience function `analyzeWithDefaultWeights()` for default configuration
+- Created comprehensive test suite in `analyze.test.ts`:
+  - 9 passing tests covering all functionality
+  - Tests for audio extraction pipeline
+  - Tests for signal fusion with custom/default weights
+  - Tests for handling chat moments and viewer clips
+  - All tests use proper mocking with Bun's spyOn
+
+### Implementation Details
+- Used TypeScript with proper types imported from audio.ts and fusion.ts
+- Configured default weights as specified: chat=0, audio=0.8, clips=0.2
+- Added flexibility for custom weights and audio output paths
+- Followed existing codebase patterns and conventions
