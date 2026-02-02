@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, ProcessingJob, JobStatus } from '@/lib/api'
 
 interface UseJobsOptions {
@@ -6,77 +6,94 @@ interface UseJobsOptions {
   pollInterval?: number // ms, 0 to disable
 }
 
+const JOBS_QUERY_KEY = 'jobs'
+
 export function useJobs(options: UseJobsOptions = {}) {
   const { status, pollInterval = 5000 } = options
-  
-  const [jobs, setJobs] = useState<ProcessingJob[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  
-  const fetchJobs = useCallback(async () => {
-    try {
-      const { jobs: fetchedJobs } = await api.jobs.list(status)
-      setJobs(fetchedJobs)
-      setError(null)
-    } catch (err) {
-      console.error('Failed to fetch jobs:', err)
-      setError(err instanceof Error ? err.message : 'Failed to fetch jobs')
-    } finally {
-      setLoading(false)
-    }
-  }, [status])
-  
-  useEffect(() => {
-    fetchJobs()
-    
-    // Set up polling if enabled and there are active jobs
-    if (pollInterval > 0) {
-      const interval = setInterval(() => {
-        // Only poll if there are non-terminal jobs
-        const hasActiveJobs = jobs.some(
-          j => !['completed', 'failed'].includes(j.status)
-        )
-        if (hasActiveJobs || loading) {
-          fetchJobs()
-        }
-      }, pollInterval)
-      
-      return () => clearInterval(interval)
-    }
-  }, [fetchJobs, pollInterval, jobs, loading])
-  
-  const createJob = async (data: Parameters<typeof api.jobs.create>[0]) => {
-    const job = await api.jobs.create(data)
-    setJobs(prev => [job, ...prev])
-    return job
-  }
-  
-  const cancelJob = async (id: string) => {
-    const job = await api.jobs.cancel(id)
-    setJobs(prev => prev.map(j => j.id === id ? job : j))
-    return job
-  }
-  
-  const retryJob = async (id: string) => {
-    const job = await api.jobs.retry(id)
-    setJobs(prev => prev.map(j => j.id === id ? job : j))
-    return job
-  }
-  
-  const deleteJob = async (id: string) => {
-    await api.jobs.delete(id)
-    setJobs(prev => prev.filter(j => j.id !== id))
-  }
-  
+  const queryClient = useQueryClient()
+
+  // Fetch jobs with TanStack Query
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: [JOBS_QUERY_KEY, status],
+    queryFn: async () => {
+      const { jobs } = await api.jobs.list(status)
+      return jobs
+    },
+    refetchInterval: (query) => {
+      const jobs = query.state.data
+      if (!jobs || pollInterval === 0) return false
+
+      // Only poll if there are active (non-terminal) jobs
+      const hasActiveJobs = jobs.some(
+        j => !['completed', 'failed'].includes(j.status)
+      )
+      return hasActiveJobs ? pollInterval : false
+    },
+  })
+
+  const jobs = data ?? []
+  const error = queryError instanceof Error ? queryError.message : queryError ? 'Failed to fetch jobs' : null
+
+  // Mutations with optimistic updates
+  const createJobMutation = useMutation({
+    mutationFn: async (data: Parameters<typeof api.jobs.create>[0]) => {
+      return await api.jobs.create(data)
+    },
+    onSuccess: (newJob) => {
+      queryClient.setQueryData<ProcessingJob[]>([JOBS_QUERY_KEY, status], (old) =>
+        old ? [newJob, ...old] : [newJob]
+      )
+    },
+  })
+
+  const cancelJobMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await api.jobs.cancel(id)
+    },
+    onSuccess: (updatedJob) => {
+      queryClient.setQueryData<ProcessingJob[]>([JOBS_QUERY_KEY, status], (old) =>
+        old ? old.map(j => j.id === updatedJob.id ? updatedJob : j) : [updatedJob]
+      )
+    },
+  })
+
+  const retryJobMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await api.jobs.retry(id)
+    },
+    onSuccess: (updatedJob) => {
+      queryClient.setQueryData<ProcessingJob[]>([JOBS_QUERY_KEY, status], (old) =>
+        old ? old.map(j => j.id === updatedJob.id ? updatedJob : j) : [updatedJob]
+      )
+    },
+  })
+
+  const deleteJobMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.jobs.delete(id)
+      return id
+    },
+    onSuccess: (deletedId) => {
+      queryClient.setQueryData<ProcessingJob[]>([JOBS_QUERY_KEY, status], (old) =>
+        old ? old.filter(j => j.id !== deletedId) : []
+      )
+    },
+  })
+
   return {
     jobs,
     loading,
     error,
-    refresh: fetchJobs,
-    createJob,
-    cancelJob,
-    retryJob,
-    deleteJob,
+    refresh: refetch,
+    createJob: createJobMutation.mutateAsync,
+    cancelJob: cancelJobMutation.mutateAsync,
+    retryJob: retryJobMutation.mutateAsync,
+    deleteJob: deleteJobMutation.mutateAsync,
   }
 }
 
@@ -84,54 +101,28 @@ export function useJobs(options: UseJobsOptions = {}) {
  * Hook for watching a single job's progress
  */
 export function useJobProgress(jobId: string | null, pollInterval = 2000) {
-  const [job, setJob] = useState<ProcessingJob | null>(null)
-  const [loading, setLoading] = useState(!!jobId)
-  const [error, setError] = useState<string | null>(null)
-  
-  useEffect(() => {
-    if (!jobId) {
-      setJob(null)
-      setLoading(false)
-      return
-    }
-    
-    let mounted = true
-    
-    const fetchJob = async () => {
-      try {
-        const fetchedJob = await api.jobs.get(jobId)
-        if (mounted) {
-          setJob(fetchedJob)
-          setError(null)
-        }
-      } catch (err) {
-        if (mounted) {
-          console.error('Failed to fetch job:', err)
-          setError(err instanceof Error ? err.message : 'Failed to fetch job')
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false)
-        }
-      }
-    }
-    
-    fetchJob()
-    
-    // Poll until job is terminal
-    const interval = setInterval(() => {
-      if (job && ['completed', 'failed'].includes(job.status)) {
-        clearInterval(interval)
-        return
-      }
-      fetchJob()
-    }, pollInterval)
-    
-    return () => {
-      mounted = false
-      clearInterval(interval)
-    }
-  }, [jobId, pollInterval])
-  
-  return { job, loading, error }
+  const {
+    data: job,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: ['job', jobId],
+    queryFn: async () => {
+      if (!jobId) return null
+      return await api.jobs.get(jobId)
+    },
+    enabled: !!jobId,
+    refetchInterval: (query) => {
+      const job = query.state.data
+      if (!job || !jobId) return false
+
+      // Stop polling once job reaches a terminal state
+      const isTerminal = ['completed', 'failed'].includes(job.status)
+      return isTerminal ? false : pollInterval
+    },
+  })
+
+  const error = queryError instanceof Error ? queryError.message : queryError ? 'Failed to fetch job' : null
+
+  return { job: job ?? null, loading, error }
 }
