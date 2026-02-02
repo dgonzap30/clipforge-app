@@ -8,9 +8,9 @@ import { env } from '../lib/env'
  * BullMQ requires a Redis connection to manage job queues.
  * This factory creates a connection using the REDIS_URL from environment variables.
  *
- * @returns ConnectionOptions for BullMQ
+ * @returns IORedis connection for BullMQ
  */
-export function createRedisConnection(): ConnectionOptions {
+export function createRedisConnection(): IORedis {
   // Parse Redis URL to extract connection details
   const redisUrl = new URL(env.REDIS_URL)
 

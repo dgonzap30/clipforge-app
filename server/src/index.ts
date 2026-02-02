@@ -7,8 +7,8 @@ import { authRoutes } from './routes/auth'
 import { vodsRoutes } from './routes/vods'
 import { clipsRoutes } from './routes/clips'
 import { jobsRoutes } from './routes/jobs'
-import { worker, stopWorker } from './queue/worker'
-import { closeRedisConnection } from './queue/connection'
+import { vodWorker, closeWorker } from './queue/worker'
+import { redisConnection } from './queue/connection'
 
 const app = new Hono()
 
@@ -65,10 +65,10 @@ async function gracefulShutdown(signal: string) {
 
   try {
     // Stop accepting new jobs
-    await stopWorker()
+    await closeWorker()
 
     // Close Redis connection
-    await closeRedisConnection()
+    await redisConnection.quit()
 
     console.log('Shutdown complete')
     process.exit(0)
