@@ -1,8 +1,10 @@
 /**
  * API Client
- * 
+ *
  * Connects frontend to ClipForge backend
  */
+
+import { supabase } from './supabase'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787'
 
@@ -22,16 +24,35 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`
-  
+
+  // Get the access token from Supabase session
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+
+  // Add Authorization header if session exists
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`
+  }
+
+  // Merge with any additional headers from options
+  if (options.headers) {
+    Object.entries(options.headers).forEach(([key, value]) => {
+      if (typeof value === 'string') {
+        headers[key] = value
+      }
+    })
+  }
+
   const response = await fetch(url, {
     ...options,
-    credentials: 'include', // Include cookies for auth
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   })
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     throw new APIError(
@@ -40,28 +61,8 @@ async function request<T>(
       error
     )
   }
-  
-  return response.json()
-}
 
-// Auth API
-export const auth = {
-  getLoginUrl: () => `${API_BASE}/api/auth/login`,
-  
-  getMe: () => request<{
-    user: {
-      id: string
-      login: string
-      display_name: string
-      profile_image_url: string
-      email?: string
-    } | null
-    authenticated: boolean
-  }>('/api/auth/me'),
-  
-  logout: () => request<{ success: boolean }>('/api/auth/logout', { 
-    method: 'POST' 
-  }),
+  return response.json()
 }
 
 // VODs API
@@ -242,7 +243,6 @@ export const health = () => request<{ status: string }>('/health')
 
 // Export all
 export const api = {
-  auth,
   vods,
   jobs,
   clips,
