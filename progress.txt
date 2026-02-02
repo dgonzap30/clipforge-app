@@ -1,0 +1,26 @@
+Task: Update src/hooks/index.ts: add exports for useClips, useVods, useJobProgress hooks
+
+Implementation completed:
+
+1. Created src/hooks/useClips.ts
+   - Implemented useClips hook with full CRUD operations
+   - Supports filtering by status, limit, offset
+   - Optional polling for processing clips
+   - Methods: updateClip, deleteClip, bulkDelete, bulkExport
+
+2. Created src/hooks/useVods.ts
+   - Implemented useVods hook for fetching VOD lists
+   - Supports fetching user's own VODs or by channel
+   - Optional polling
+   - Also added useVod hook for fetching single VOD by ID
+
+3. Updated src/hooks/index.ts
+   - Added export for useClips from './useClips'
+   - Added exports for useVods and useVod from './useVods'
+   - useJobProgress was already exported
+
+All hooks follow the same pattern as existing useJobs hook with:
+- Loading, error, and data states
+- Refresh functionality
+- Optional polling
+- Async operations for mutations
