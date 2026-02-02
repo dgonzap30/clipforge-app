@@ -1,0 +1,15 @@
+Created docker-compose.yml at project root with:
+- API service built from server/Dockerfile
+- Redis service (redis:7-alpine)
+- Environment variable pass-through for Supabase, OpenAI, and app config
+- Health checks for both services
+- Named volumes for Redis data persistence and temp file processing
+- Bridge network for service communication
+- Proper service dependencies (API waits for Redis to be healthy)
+
+Also created:
+- server/Dockerfile: Multi-stage build with Bun runtime, FFmpeg, and yt-dlp
+- .env.example: Template file documenting required environment variables
+
+The docker-compose setup allows running the entire backend stack with:
+  docker-compose up -d
