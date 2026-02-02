@@ -22,6 +22,10 @@ interface AppState {
   // UI-only state
   user: {
     id: string | null
+    displayName: string | null
+    login: string | null
+    avatarUrl: string | null
+    email: string | null
     twitchConnected: boolean
     tiktokConnected: boolean
     youtubeConnected: boolean
@@ -56,6 +60,10 @@ export const useStore = create<AppState>()(
     (set) => ({
       user: {
         id: null,
+        displayName: null,
+        login: null,
+        avatarUrl: null,
+        email: null,
         twitchConnected: false,
         tiktokConnected: false,
         youtubeConnected: false,

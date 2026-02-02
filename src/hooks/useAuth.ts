@@ -60,6 +60,10 @@ export function useAuth() {
       setError(err instanceof Error ? err.message : 'Failed to check auth')
       setUser({
         id: null,
+        displayName: null,
+        login: null,
+        avatarUrl: null,
+        email: null,
         twitchConnected: false,
       })
       setLoading(false)
@@ -98,6 +102,10 @@ export function useAuth() {
 
       setUser({
         id: null,
+        displayName: null,
+        login: null,
+        avatarUrl: null,
+        email: null,
         twitchConnected: false,
         tiktokConnected: false,
         youtubeConnected: false,
