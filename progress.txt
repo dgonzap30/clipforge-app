@@ -1,0 +1,68 @@
+# Progress Report
+
+## Task: Create server/src/lib/storage.ts with upload, download, getSignedUrl helpers
+
+### Completed Work
+
+1. **Updated server/src/lib/env.ts**
+   - Removed old S3-compatible environment variables
+   - Added SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
+   - Added OPENAI_API_KEY for future AI features
+
+2. **Created server/src/lib/supabase.ts**
+   - Initialized Supabase client using service role key
+   - Configured for server-side usage (no auto-refresh, no persistence)
+   - Uses environment variables from env.ts
+
+3. **Created server/src/lib/storage.ts**
+   - Implemented upload() helper with support for both buckets
+   - Implemented download() helper for retrieving files
+   - Implemented getSignedUrl() helper with configurable expiration (default: 1 hour)
+   - Added deleteFile() helper for file cleanup
+   - Added listFiles() helper for browsing bucket contents
+   - Added getPublicUrl() helper for public buckets
+   - Defined BUCKETS constant for 'clipforge-clips' and 'clipforge-temp'
+   - All functions return consistent result objects with success/error handling
+   - TypeScript types for all options and results
+
+4. **Created comprehensive tests**
+   - Test suite at server/src/lib/__tests__/storage.test.ts
+   - Tests for upload (including upsert functionality)
+   - Tests for download
+   - Tests for getSignedUrl with custom expiration
+   - Tests for deleteFile
+   - Tests for listFiles with pagination
+   - Error handling tests for invalid buckets and non-existent files
+
+### Implementation Details
+
+The storage module provides a clean, type-safe API for Supabase Storage operations:
+
+```typescript
+// Upload example
+const result = await upload({
+  bucket: BUCKETS.CLIPS,
+  path: 'user-123/clip-456.mp4',
+  file: videoBlob,
+  contentType: 'video/mp4'
+})
+
+// Get signed URL example
+const { url } = await getSignedUrl({
+  bucket: BUCKETS.CLIPS,
+  path: 'user-123/clip-456.mp4',
+  expiresIn: 3600 // 1 hour
+})
+```
+
+All helper functions follow consistent patterns:
+- Accept options objects for better API clarity
+- Return result objects with success flag and optional error
+- Handle errors gracefully without throwing
+- Support TypeScript for type safety
+
+### Files Modified/Created
+- server/src/lib/env.ts (modified)
+- server/src/lib/supabase.ts (created)
+- server/src/lib/storage.ts (created)
+- server/src/lib/__tests__/storage.test.ts (created)
