@@ -44,7 +44,7 @@ export const reframeStage: PipelineStage = {
       throw new Error(`No video files found in ${extractedClipsDir}`)
     }
 
-    console.log(`[Reframe] Processing ${videoFiles.length} clips with center crop (${targetAspect})`)
+    console.log(`[Reframe] Processing ${videoFiles.length} clips with smart reframing (${targetAspect})`)
 
     // Process each clip
     const results = []
@@ -56,12 +56,12 @@ export const reframeStage: PipelineStage = {
       console.log(`[Reframe] ${i + 1}/${videoFiles.length}: ${basename(file)}`)
 
       try {
-        // Use center crop for MVP (faceTracking disabled)
+        // Use face tracking for smart reframing
         const result = await reframeVideo({
           inputPath,
           outputPath,
           targetAspect,
-          faceTracking: false, // MVP: disabled for simplicity and performance
+          faceTracking: true, // Enable MediaPipe face detection
           smoothing: 0.7,
         })
 

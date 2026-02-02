@@ -92,19 +92,19 @@ describe('reframeStage', () => {
     expect(mockContext.settings.targetAspect).toBe('9:16')
   })
 
-  test('should use center crop with faceTracking disabled for MVP', () => {
-    // This test documents the MVP behavior:
-    // - faceTracking should be set to false
+  test('should use face tracking for smart reframing', () => {
+    // This test documents the expected behavior:
+    // - faceTracking should be set to true for MediaPipe face detection
     // - smoothing should be 0.7
     // - targetAspect should default to '9:16' if not specified
 
     const expectedConfig = {
-      faceTracking: false,
+      faceTracking: true,
       smoothing: 0.7,
       targetAspect: '9:16',
     }
 
-    expect(expectedConfig.faceTracking).toBe(false)
+    expect(expectedConfig.faceTracking).toBe(true)
     expect(expectedConfig.targetAspect).toBe('9:16')
   })
 
