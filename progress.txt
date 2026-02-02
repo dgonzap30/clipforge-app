@@ -1,0 +1,58 @@
+# Reframe Pipeline Stage Implementation
+
+## Task Completed
+Created server/src/pipeline/stages/reframe.ts: wrapper around reframe.ts reframeVideo using center crop for MVP
+
+## Files Created
+
+1. **server/src/pipeline/types.ts**
+   - Defined PipelineContext interface with job metadata, file paths, processing state, and configuration
+   - Defined PipelineStage interface with name and execute method
+   - This was marked as completed in tasks.yaml but was missing, so created it as a dependency
+
+2. **server/src/pipeline/stages/reframe.ts**
+   - Implements the reframe pipeline stage as a wrapper around extraction/reframe.ts
+   - Processes all video clips from extractedClipsDir
+   - Uses center crop method (faceTracking disabled) for MVP simplicity and performance
+   - Default target aspect ratio: 9:16 (vertical format for TikTok/Shorts/Reels)
+   - Supports configurable aspect ratios via context.settings.targetAspect
+   - Processes clips sequentially with progress logging
+   - Updates context with reframedClipsDir and progress (60%)
+
+3. **server/src/pipeline/stages/reframe.test.ts**
+   - Unit tests using Bun's built-in test runner
+   - Tests for error handling (missing extractedClipsDir, no video files)
+   - Documents MVP behavior (center crop, faceTracking disabled)
+   - Tests for configuration (custom aspect ratios, progress updates)
+
+## Implementation Details
+
+### MVP Approach
+- **Face Tracking**: Disabled for MVP (set to `false`)
+- **Cropping Method**: Center crop only
+- **Smoothing**: Set to 0.7 (for potential future keyframe smoothing)
+- **Default Aspect Ratio**: 9:16 (vertical video)
+
+### Supported Aspect Ratios
+- 9:16 (vertical - default)
+- 1:1 (square)
+- 16:9 (horizontal)
+- 4:5 (Instagram portrait)
+
+### Integration Points
+- Expects `extractedClipsDir` from previous pipeline stage
+- Outputs to `reframedClipsDir` (parallel to extracted directory)
+- Reads configuration from `context.settings.targetAspect`
+- Updates `context.currentStage` to 'reframe'
+- Sets `context.progress` to 60%
+
+### Error Handling
+- Validates extractedClipsDir exists
+- Checks for video files before processing
+- Throws descriptive errors if clips fail to process
+- Logs progress and results for debugging
+
+## Next Steps (for future implementation)
+- The orchestrator (Group 10) will chain this stage after extract and before caption
+- BullMQ worker (Group 11) will execute the full pipeline
+- Future enhancement: Enable face tracking when needed for better framing
