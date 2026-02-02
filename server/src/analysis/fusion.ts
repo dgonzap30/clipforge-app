@@ -7,6 +7,7 @@
 
 import { ChatMoment } from './chat'
 import { AudioMoment } from './audio'
+import { VisualMoment } from './visual'
 
 export interface SignalMoment {
   timestamp: number
@@ -17,6 +18,7 @@ export interface SignalMoment {
     chat?: { score: number; velocity: number }
     audio?: { score: number; type: string }
     clips?: { score: number; count: number }
+    visual?: { score: number; type: string; description: string }
   }
   suggestedTitle?: string
 }
@@ -27,6 +29,7 @@ export interface FusionConfig {
     chat: number
     audio: number
     clips: number // viewer-created clips
+    visual: number // visual scene analysis
   }
   // Timing
   preRoll: number // seconds before peak
@@ -41,9 +44,10 @@ export interface FusionConfig {
 
 const DEFAULT_CONFIG: FusionConfig = {
   weights: {
-    chat: 0.4,
-    audio: 0.4,
+    chat: 0.3,
+    audio: 0.3,
     clips: 0.2,
+    visual: 0.2,
   },
   preRoll: 5,
   postRoll: 8,
@@ -68,16 +72,18 @@ export function fuseSignals(
   chatMoments: ChatMoment[],
   audioMoments: AudioMoment[],
   viewerClips: ViewerClip[] = [],
+  visualMoments: VisualMoment[] = [],
   config: Partial<FusionConfig> = {}
 ): SignalMoment[] {
   const cfg = { ...DEFAULT_CONFIG, ...config }
   
   // Collect all timestamps
   const allTimestamps = new Set<number>()
-  
+
   chatMoments.forEach(m => allTimestamps.add(Math.round(m.timestamp)))
   audioMoments.forEach(m => allTimestamps.add(Math.round(m.timestamp)))
   viewerClips.forEach(c => allTimestamps.add(Math.round(c.timestamp)))
+  visualMoments.forEach(m => allTimestamps.add(Math.round(m.timestamp)))
   
   const candidates: SignalMoment[] = []
   
@@ -120,7 +126,7 @@ export function fuseSignals(
     if (nearbyClips.length > 0) {
       // Score based on number of clips and their views
       const clipScore = Math.min(
-        nearbyClips.length * 20 + 
+        nearbyClips.length * 20 +
         nearbyClips.reduce((sum, c) => sum + Math.log10(c.viewCount + 1) * 10, 0),
         100
       )
@@ -131,6 +137,20 @@ export function fuseSignals(
       totalScore += clipScore * cfg.weights.clips
       signalCount++
     }
+
+    // Find nearby visual moment
+    const visualMoment = visualMoments.find(
+      m => Math.abs(m.timestamp - timestamp) <= cfg.convergenceWindow
+    )
+    if (visualMoment) {
+      signals.visual = {
+        score: visualMoment.hydeScore,
+        type: visualMoment.type,
+        description: visualMoment.description,
+      }
+      totalScore += visualMoment.hydeScore * cfg.weights.visual
+      signalCount++
+    }
     
     // Apply convergence bonus
     if (signalCount >= 2) {
@@ -138,7 +158,7 @@ export function fuseSignals(
     }
     
     // Calculate confidence
-    const confidence = signalCount / 3 // max 3 signal types
+    const confidence = signalCount / 4 // max 4 signal types
     
     // Skip if below threshold
     if (totalScore < cfg.minScore) continue
@@ -150,6 +170,9 @@ export function fuseSignals(
     }
     if (signals.chat && signals.chat.velocity > 5) {
       duration += 3 // longer for high chat velocity
+    }
+    if (signals.visual?.type === 'victory' || signals.visual?.type === 'action') {
+      duration += 2 // slightly longer for visual events
     }
     duration = Math.max(cfg.minDuration, Math.min(duration, cfg.maxDuration))
     

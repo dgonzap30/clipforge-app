@@ -15,6 +15,9 @@ export const env = {
   // OpenAI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
 
+  // Anthropic (for Claude Vision API)
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
+
   // Redis (for job queue)
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
 
