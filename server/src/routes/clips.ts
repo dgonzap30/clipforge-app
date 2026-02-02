@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { supabase } from '../lib/supabase'
 import { clips as clipsStorage } from '../lib/storage'
 import { requireAuth, type AuthContext } from '../middleware/auth'
+import { getPlatformTokens } from './platforms'
+import { YouTubeClient } from '../lib/youtube'
 
 export const clipsRoutes = new Hono<AuthContext>()
 
@@ -389,15 +391,21 @@ clipsRoutes.post('/bulk/delete', zValidator('json', z.object({
 clipsRoutes.post('/bulk/export', zValidator('json', z.object({
   ids: z.array(z.string()),
   platform: z.enum(['tiktok', 'youtube', 'instagram']),
+  metadata: z.object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    privacyStatus: z.enum(['public', 'private', 'unlisted']).optional(),
+  }).optional(),
 })), async (c) => {
   const user_id = c.get('user_id')
-  const { ids, platform } = c.req.valid('json')
+  const { ids, platform, metadata } = c.req.valid('json')
 
   try {
-    // Fetch clips that are ready for export
+    // Fetch clips that are ready for export with full details
     const { data: clips, error: fetchError } = await supabase
       .from('clips')
-      .select('id, status, exported_to')
+      .select('id, title, status, exported_to, video_path')
       .eq('user_id', user_id)
       .eq('status', 'ready')
       .in('id', ids)
@@ -407,12 +415,79 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
       return c.json({ error: 'Failed to fetch clips' }, 500)
     }
 
-    const exported: string[] = []
+    if (!clips || clips.length === 0) {
+      return c.json({ error: 'No clips found ready for export' }, 404)
+    }
 
-    // Update each clip with the new export platform
-    for (const clip of clips || []) {
+    const exported: string[] = []
+    const failed: Array<{ id: string; error: string }> = []
+
+    // Process each clip based on platform
+    for (const clip of clips) {
       const exportedTo = clip.exported_to || []
-      if (!exportedTo.includes(platform)) {
+
+      // Skip if already exported to this platform
+      if (exportedTo.includes(platform)) {
+        continue
+      }
+
+      try {
+        // Get platform tokens
+        const tokens = await getPlatformTokens(user_id, platform)
+
+        if (!tokens) {
+          failed.push({ id: clip.id, error: `${platform} not connected or token expired` })
+          continue
+        }
+
+        // Download clip file to temporary location for upload
+        if (!clip.video_path) {
+          failed.push({ id: clip.id, error: 'No video file found' })
+          continue
+        }
+
+        const signedUrl = await clipsStorage.getSignedUrl(clip.video_path)
+        if (!signedUrl) {
+          failed.push({ id: clip.id, error: 'Failed to get video URL' })
+          continue
+        }
+
+        // Download file to temp location
+        const response = await fetch(signedUrl)
+        if (!response.ok) {
+          failed.push({ id: clip.id, error: 'Failed to download video' })
+          continue
+        }
+
+        const videoBuffer = await response.arrayBuffer()
+        const tempPath = `/tmp/${clip.id}.mp4`
+        await Bun.write(tempPath, videoBuffer)
+
+        // Upload to platform
+        if (platform === 'youtube') {
+          const youtubeClient = new YouTubeClient(tokens.accessToken)
+
+          await youtubeClient.uploadVideo(tempPath, {
+            title: metadata?.title || clip.title,
+            description: metadata?.description || `Clip from ${clip.title}`,
+            tags: metadata?.tags || ['#Shorts'],
+            categoryId: '20', // Gaming
+            privacyStatus: metadata?.privacyStatus || 'public',
+          })
+
+          // Clean up temp file
+          await Bun.write(tempPath, '')
+        } else if (platform === 'tiktok') {
+          // TODO: Implement TikTok upload
+          failed.push({ id: clip.id, error: 'TikTok upload not yet implemented' })
+          continue
+        } else if (platform === 'instagram') {
+          // TODO: Implement Instagram upload
+          failed.push({ id: clip.id, error: 'Instagram upload not yet implemented' })
+          continue
+        }
+
+        // Update clip with export status
         exportedTo.push(platform)
 
         const { error: updateError } = await supabase
@@ -429,13 +504,22 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
           exported.push(clip.id)
         } else {
           console.error('Error updating clip export status:', updateError)
+          failed.push({ id: clip.id, error: 'Failed to update export status' })
         }
+      } catch (uploadError) {
+        console.error(`Error uploading clip ${clip.id} to ${platform}:`, uploadError)
+        failed.push({
+          id: clip.id,
+          error: uploadError instanceof Error ? uploadError.message : 'Upload failed'
+        })
       }
     }
 
-    // TODO: Queue export jobs for actual platform upload
-
-    return c.json({ exported })
+    return c.json({
+      exported,
+      failed,
+      message: `Successfully exported ${exported.length} clips to ${platform}`
+    })
   } catch (error: Error | unknown) {
     console.error('Unexpected error bulk exporting clips:', error)
     return c.json({ error: 'Internal server error' }, 500)
