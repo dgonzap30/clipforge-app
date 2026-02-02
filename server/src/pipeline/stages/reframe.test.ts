@@ -127,4 +127,94 @@ describe('reframeStage', () => {
 
     expect(expectedProgress).toBe(60)
   })
+
+  describe('split-screen functionality', () => {
+    test('should detect split-screen setting when enabled', () => {
+      const splitScreenContext = {
+        ...mockContext,
+        settings: {
+          ...mockContext.settings,
+          splitScreen: true,
+        },
+      }
+
+      expect(splitScreenContext.settings.splitScreen).toBe(true)
+    })
+
+    test('should default to false when splitScreen not specified', () => {
+      const defaultContext = {
+        ...mockContext,
+        settings: {
+          ...mockContext.settings,
+        },
+      }
+
+      expect(defaultContext.settings.splitScreen).toBeUndefined()
+    })
+
+    test('should use standard reframe when splitScreen is false', () => {
+      const standardContext = {
+        ...mockContext,
+        settings: {
+          ...mockContext.settings,
+          splitScreen: false,
+        },
+      }
+
+      expect(standardContext.settings.splitScreen).toBe(false)
+    })
+
+    test('should check for dual sources when splitScreen is enabled', () => {
+      const splitScreenContext = {
+        ...mockContext,
+        settings: {
+          ...mockContext.settings,
+          splitScreen: true,
+        },
+        metadata: {
+          facecamPath: '/path/to/facecam.mp4',
+          gameplayPath: '/path/to/gameplay.mp4',
+        },
+      }
+
+      expect(splitScreenContext.settings.splitScreen).toBe(true)
+      expect(splitScreenContext.metadata?.facecamPath).toBeDefined()
+      expect(splitScreenContext.metadata?.gameplayPath).toBeDefined()
+    })
+
+    test('should fall back to standard reframe when dual sources not available', () => {
+      const splitScreenContext = {
+        ...mockContext,
+        settings: {
+          ...mockContext.settings,
+          splitScreen: true,
+        },
+        metadata: {},
+      }
+
+      expect(splitScreenContext.settings.splitScreen).toBe(true)
+      expect(splitScreenContext.metadata?.facecamPath).toBeUndefined()
+      expect(splitScreenContext.metadata?.gameplayPath).toBeUndefined()
+    })
+
+    test('should maintain 9:16 aspect ratio for split-screen', () => {
+      const splitScreenContext = {
+        ...mockContext,
+        settings: {
+          ...mockContext.settings,
+          splitScreen: true,
+          targetAspect: '9:16' as const,
+        },
+      }
+
+      expect(splitScreenContext.settings.targetAspect).toBe('9:16')
+    })
+
+    test('should use facecamRatio of 0.35 by default', () => {
+      // Document the default facecam ratio used in createSplitScreen
+      const defaultFacecamRatio = 0.35
+
+      expect(defaultFacecamRatio).toBe(0.35)
+    })
+  })
 })

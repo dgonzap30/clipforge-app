@@ -38,6 +38,7 @@ export interface ProcessingJob {
     faceReactions: boolean
     autoCaptions: boolean
     outputFormat: 'vertical' | 'square' | 'horizontal'
+    splitScreen: boolean
   }
 }
 
@@ -101,6 +102,7 @@ const createJobSchema = z.object({
     faceReactions: z.boolean().default(true),
     autoCaptions: z.boolean().default(true),
     outputFormat: z.enum(['vertical', 'square', 'horizontal']).default('vertical'),
+    splitScreen: z.boolean().default(false),
   }).default({}),
 })
 
@@ -208,6 +210,7 @@ jobsRoutes.post('/', zValidator('json', createJobSchema), async (c) => {
       faceReactions: input.settings?.faceReactions ?? true,
       autoCaptions: input.settings?.autoCaptions ?? true,
       outputFormat: input.settings?.outputFormat ?? 'vertical',
+      splitScreen: input.settings?.splitScreen ?? false,
     },
   }
 
