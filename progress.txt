@@ -1,0 +1,20 @@
+Created server/Dockerfile with multi-stage build:
+- Stage 1 (deps): Installs production dependencies with Bun
+- Stage 2 (builder): Installs all dependencies and performs TypeScript type checking
+- Stage 3 (runtime): Final image with Bun runtime, FFmpeg, and yt-dlp
+  - Uses Alpine-based Bun image for minimal footprint
+  - Installs FFmpeg via apk
+  - Installs yt-dlp via pip3
+  - Runs as non-root user (nodejs:1001) for security
+  - Exposes port 8787
+  - Includes health check endpoint
+  - Optimized with multi-stage build to keep final image small
+
+Also created server/.dockerignore to exclude unnecessary files from Docker context.
+
+Key features:
+- Multi-stage build reduces final image size
+- Type checking in build stage catches errors before runtime
+- Security: runs as non-root user
+- Health checks for container orchestration
+- Production-ready with only necessary dependencies in final image
