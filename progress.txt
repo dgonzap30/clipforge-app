@@ -1,0 +1,35 @@
+Created src/components/clips/ClipCard.tsx
+
+## Summary
+Implemented a reusable ClipCard component for displaying video clips with the following features:
+
+### Features Implemented
+1. **Thumbnail Display**: Shows clip thumbnail or placeholder icon if not available
+2. **Title**: Displays clip title with line-clamp for long titles
+3. **Duration Badge**: Shows formatted duration (MM:SS) in bottom-right corner
+4. **Status Badge**: Dynamic status indicator with icons and colors for:
+   - Processing (blue, with spinning loader)
+   - Ready (green, with checkmark)
+   - Exported (forge red/orange, with checkmark)
+   - Failed (red, with alert icon)
+5. **HYDE Score Badge**: Displayed for high-scoring clips (≥70)
+6. **Action Buttons**: Configurable buttons for:
+   - Edit (always available)
+   - Download (only for 'ready' clips)
+   - Share (only for 'ready' clips)
+   - Delete (with red hover state)
+7. **Play Overlay**: Hover-activated play button for ready clips
+8. **Metadata Row**: Shows HYDE score and available signals (chat velocity, audio peaks)
+
+### Technical Details
+- Fully typed with TypeScript
+- Uses existing Clip interface from src/lib/api.ts
+- Follows project styling patterns (Tailwind CSS, dark theme)
+- Uses lucide-react icons
+- Responsive design with hover states
+- Accessibility labels on all interactive elements
+- Optional callback props for flexibility
+
+### Notes
+- Test framework not yet configured in the project, so tests were skipped
+- Component is ready to use and follows all existing patterns in the codebase
