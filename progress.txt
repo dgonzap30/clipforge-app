@@ -1,0 +1,21 @@
+Task: Update src/lib/api.ts: replace credentials:'include' with Authorization Bearer token from supabase.auth.getSession(), remove auth namespace object
+
+Changes Made:
+1. Installed @supabase/supabase-js package as a dependency
+2. Created src/lib/supabase.ts with Supabase client initialization using VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables
+3. Updated src/lib/api.ts:
+   - Added import for Supabase client from './supabase'
+   - Modified the request() function to:
+     * Remove credentials:'include' from fetch options
+     * Call supabase.auth.getSession() to get the current session
+     * Add Authorization Bearer token header when a session exists
+     * Fixed header typing to use Record<string, string> for proper type safety
+   - Removed the entire auth namespace object containing getLoginUrl, getMe, and logout methods
+   - Updated api exports to remove auth from the exported api object
+
+Notes:
+- The auth functionality will now be handled through Supabase Auth directly in useAuth.ts (separate task)
+- All API requests now automatically include the Authorization header with the Bearer token from Supabase session
+- The change enables stateless authentication using JWT tokens instead of cookie-based sessions
+
+Status: COMPLETE
