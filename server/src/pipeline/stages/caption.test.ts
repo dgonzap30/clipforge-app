@@ -264,4 +264,49 @@ describe('Integration expectations', () => {
     expect(result).toBeDefined()
     // In a real integration test, we'd verify the ASS file contains these styles
   })
+
+  test('should pass animation options to ASS generator', async () => {
+    const customAnimations = {
+      bounce: true,
+      glow: true,
+      fadeIn: true,
+      intensity: 'strong' as const,
+    }
+
+    const result = await captionStage({
+      videoPath: '/test/video.mp4',
+      outputDir: '/test/output',
+      config: {
+        styling: {
+          animations: customAnimations,
+        },
+      },
+    })
+
+    expect(result).toBeDefined()
+    expect(result.assPath).toBe('/test/output/captions.ass')
+    // In a real integration test, we'd verify the ASS file contains animation tags
+  })
+
+  test('should work with animations disabled', async () => {
+    const noAnimations = {
+      bounce: false,
+      glow: false,
+      fadeIn: false,
+      intensity: 'medium' as const,
+    }
+
+    const result = await captionStage({
+      videoPath: '/test/video.mp4',
+      outputDir: '/test/output',
+      config: {
+        styling: {
+          animations: noAnimations,
+        },
+      },
+    })
+
+    expect(result).toBeDefined()
+    expect(result.assPath).toBe('/test/output/captions.ass')
+  })
 })

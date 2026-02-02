@@ -14,6 +14,7 @@ import {
   burnCaptions,
   type TranscriptionResult,
   type TranscribeConfig,
+  type CaptionAnimations,
 } from '../../captions/transcribe'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -35,6 +36,7 @@ export interface CaptionConfig {
     highlightColor?: string
     outlineColor?: string
     position?: 'bottom' | 'center' | 'top'
+    animations?: CaptionAnimations
   }
 
   // Output settings

@@ -31,6 +31,13 @@ export interface TranscribeConfig {
   wordTimestamps?: boolean
 }
 
+export interface CaptionAnimations {
+  bounce: boolean
+  glow: boolean
+  fadeIn: boolean
+  intensity: 'subtle' | 'medium' | 'strong'
+}
+
 /**
  * Transcribe audio using OpenAI Whisper API
  */
@@ -177,6 +184,7 @@ export function generateTikTokASS(
     highlightColor?: string
     outlineColor?: string
     position?: 'bottom' | 'center' | 'top'
+    animations?: CaptionAnimations
   } = {}
 ): string {
   const {
@@ -186,10 +194,28 @@ export function generateTikTokASS(
     highlightColor = '&H00FFFF', // Yellow (BGR)
     outlineColor = '&H000000', // Black
     position = 'center',
+    animations = {
+      bounce: true,
+      glow: true,
+      fadeIn: true,
+      intensity: 'medium',
+    },
   } = options
   
   const yPosition = position === 'bottom' ? 800 : position === 'top' ? 200 : 540
-  
+
+  // Calculate animation parameters based on intensity
+  const getAnimationParams = () => {
+    const intensityMap = {
+      subtle: { scalePercent: 105, glowOutline: 4, fadeAlpha: 200, duration: 150 },
+      medium: { scalePercent: 110, glowOutline: 5, fadeAlpha: 128, duration: 100 },
+      strong: { scalePercent: 120, glowOutline: 6, fadeAlpha: 80, duration: 80 },
+    }
+    return intensityMap[animations.intensity]
+  }
+
+  const animParams = getAnimationParams()
+
   const header = `[Script Info]
 Title: ClipForge Captions
 ScriptType: v4.00+
@@ -219,20 +245,45 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     // Word-by-word highlighting
     for (let i = 0; i < segment.words.length; i++) {
       const word = segment.words[i]
-      
+
       // Build text with current word highlighted
       const before = segment.words.slice(0, i).map(w => w.word).join(' ')
       const current = word.word
       const after = segment.words.slice(i + 1).map(w => w.word).join(' ')
-      
+
+      // Calculate word duration in milliseconds for animation timing
+      const wordDuration = (segment.words[i + 1]?.start || word.end) - word.start
+      const durationMs = Math.round(wordDuration * 1000)
+
+      // Build animation tags for the highlighted word
+      let highlightAnimations = ''
+
+      if (animations.bounce) {
+        // Bounce effect: scale up then back down
+        const bounceUp = animParams.duration
+        const bounceDown = animParams.duration * 2
+        highlightAnimations += `{\\t(0,${bounceUp},\\fscx${animParams.scalePercent}\\fscy${animParams.scalePercent})\\t(${bounceUp},${bounceDown},\\fscx100\\fscy100)}`
+      }
+
+      if (animations.glow) {
+        // Glow pulse: increase outline width then restore
+        const glowTime = Math.max(animParams.duration, durationMs - animParams.duration)
+        highlightAnimations += `{\\t(0,${animParams.duration},\\bord${animParams.glowOutline})\\t(${glowTime},${durationMs},\\bord3)}`
+      }
+
+      if (animations.fadeIn) {
+        // Fade-in effect for new words
+        highlightAnimations += `{\\fade(${animParams.fadeAlpha},0,0,0,0,${animParams.duration})}`
+      }
+
       const text = [
         before ? `{\\c${primaryColor}}${escapeASS(before)} ` : '',
-        `{\\c${highlightColor}}${escapeASS(current)}`,
+        `${highlightAnimations}{\\c${highlightColor}}${escapeASS(current)}`,
         after ? `{\\c${primaryColor}} ${escapeASS(after)}` : '',
       ].join('')
-      
+
       const endTime = segment.words[i + 1]?.start || word.end
-      
+
       events.push(
         `Dialogue: 0,${formatASSTime(word.start)},${formatASSTime(endTime)},Default,,0,0,0,,${text}`
       )
