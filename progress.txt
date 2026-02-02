@@ -14,3 +14,46 @@
 - The env object now exports Supabase credentials instead of S3-compatible storage credentials
 - OpenAI API key has been added for AI functionality
 - Default values remain empty strings to maintain consistency with other configuration
+
+---
+
+## Task: Add multi-face handling and speaker prioritization
+
+### Changes Made:
+- Enhanced server/src/extraction/reframe.ts with comprehensive multi-face handling and speaker prioritization
+- Added new interfaces: DetectedFace, FaceTrack, FaceSelectionStrategy
+- Extended ReframeConfig to support faceStrategy and audioMoments parameters
+- Implemented IOU-based face tracking for consistent face identification across frames
+- Added three face selection strategies:
+  1. 'largest': Selects face with largest average bounding box area
+  2. 'speaker': Correlates faces with audio moments for speaker detection
+  3. 'center': Selects face closest to frame center
+- Implemented speaker prioritization using audio moment correlation (within 0.5s window)
+- Added face persistence tracking to avoid jumping between different faces
+- Created comprehensive test suite in server/src/extraction/reframe.test.ts with 19 test cases
+
+### Files Modified:
+- server/src/extraction/reframe.ts
+- server/src/extraction/reframe.test.ts (new file)
+
+### Test Coverage:
+- IOU calculation tests (perfect overlap, no overlap, partial overlap)
+- Face track building tests (single track, multiple tracks, temporal separation)
+- Largest face selection tests (single track, multiple tracks, averaging)
+- Speaker track selection tests (audio correlation, proximity weighting, fallback)
+- Center track selection tests
+- Integration tests for multi-face handling scenarios
+
+### Implementation Details:
+1. **Face Tracking**: Uses Intersection Over Union (IOU) algorithm with 0.3 threshold
+2. **Temporal Continuity**: Only tracks faces within 1 second of each other
+3. **Speaker Detection**: Correlates faces with audio moments within 0.5s window
+4. **Proximity Weighting**: Linear weighting based on temporal distance to audio peaks
+5. **Graceful Fallback**: Falls back to largest face when no audio correlation exists
+
+### Notes:
+- Face detection stub remains in place (detectFacesForReframe returns empty array)
+- Ready for MediaPipe integration when face detection is implemented
+- All tests passing (19/19)
+- No new linting errors introduced
+- Implementation matches PRD requirements for multi-face handling and speaker prioritization

@@ -6,8 +6,10 @@
  */
 
 import { $ } from 'bun'
+import type { AudioMoment } from '../analysis/audio'
 
 export type AspectRatio = '9:16' | '1:1' | '16:9' | '4:5'
+export type FaceSelectionStrategy = 'largest' | 'speaker' | 'center'
 
 export interface ReframeConfig {
   inputPath: string
@@ -15,6 +17,8 @@ export interface ReframeConfig {
   targetAspect: AspectRatio
   faceTracking?: boolean
   smoothing?: number // 0-1, how smooth the pan should be
+  faceStrategy?: FaceSelectionStrategy
+  audioMoments?: AudioMoment[] // For speaker prioritization
 }
 
 export interface CropKeyframe {
@@ -23,6 +27,23 @@ export interface CropKeyframe {
   y: number // crop y offset
   width: number
   height: number
+}
+
+export interface DetectedFace {
+  timestamp: number // seconds
+  x: number // bounding box x
+  y: number // bounding box y
+  width: number
+  height: number
+  confidence: number // 0-1
+  trackingId?: number // For persistence across frames
+}
+
+export interface FaceTrack {
+  trackingId: number
+  faces: DetectedFace[]
+  lastSeen: number
+  speakerScore: number // Correlation with audio moments
 }
 
 export interface ReframeResult {
@@ -53,6 +74,8 @@ export async function reframeVideo(config: ReframeConfig): Promise<ReframeResult
     targetAspect,
     faceTracking = true,
     smoothing = 0.7,
+    faceStrategy = 'largest',
+    audioMoments = [],
   } = config
   
   const targetDims = ASPECT_DIMENSIONS[targetAspect]
@@ -87,7 +110,15 @@ export async function reframeVideo(config: ReframeConfig): Promise<ReframeResult
   if (faceTracking) {
     try {
       // Try face detection
-      keyframes = await detectFacesForReframe(inputPath, cropWidth, cropHeight, sourceWidth, sourceHeight)
+      keyframes = await detectFacesForReframe(
+        inputPath,
+        cropWidth,
+        cropHeight,
+        sourceWidth,
+        sourceHeight,
+        faceStrategy,
+        audioMoments
+      )
       if (keyframes.length > 0) {
         method = 'face_tracking'
       }
@@ -134,29 +165,297 @@ export async function reframeVideo(config: ReframeConfig): Promise<ReframeResult
 
 /**
  * Detect faces and generate keyframes for cropping
- * 
+ *
  * Uses FFmpeg's facedetect filter or external face detection.
  * For production, consider using MediaPipe or similar for better accuracy.
  */
 async function detectFacesForReframe(
   inputPath: string,
-  _cropWidth: number,
-  _cropHeight: number,
-  _sourceWidth: number,
-  _sourceHeight: number
+  cropWidth: number,
+  cropHeight: number,
+  sourceWidth: number,
+  sourceHeight: number,
+  strategy: FaceSelectionStrategy = 'largest',
+  audioMoments: AudioMoment[] = []
 ): Promise<CropKeyframe[]> {
   // Use FFmpeg's metadata extraction for face detection
   // This is a simplified approach - for production, use MediaPipe
 
-  const _result = await $`ffmpeg -i ${inputPath} \
-    -vf "select='eq(pict_type,I)',metadata=print:file=-" \
-    -vsync vfr -f null - 2>&1`.text()
+  // For now, we skip the FFmpeg call and return empty
+  // TODO: Implement proper face detection parsing with MediaPipe
+  // const result = await $`ffmpeg -i ${inputPath} \
+  //   -vf "select='eq(pict_type,I)',metadata=print:file=-" \
+  //   -vsync vfr -f null - 2>&1`.text()
 
   // Parse face positions from output
-  // For now, return empty to fall back to center crop
-  // TODO: Implement proper face detection parsing
+  // Simulate detected faces for implementation
+  // In production, this would parse actual face detection data
+  const detectedFaces: DetectedFace[] = []
 
-  return []
+  if (detectedFaces.length === 0) {
+    return []
+  }
+
+  // Apply multi-face handling and speaker prioritization
+  const tracks = buildFaceTracks(detectedFaces)
+  const selectedTrack = selectBestTrack(tracks, strategy, audioMoments)
+
+  if (!selectedTrack) {
+    return []
+  }
+
+  // Convert selected track to crop keyframes
+  return convertFaceTrackToKeyframes(
+    selectedTrack,
+    cropWidth,
+    cropHeight,
+    sourceWidth,
+    sourceHeight
+  )
+}
+
+/**
+ * Build face tracks from detected faces using IOU-based tracking
+ */
+function buildFaceTracks(faces: DetectedFace[]): FaceTrack[] {
+  const tracks: FaceTrack[] = []
+  let nextTrackId = 0
+
+  // Sort faces by timestamp
+  const sortedFaces = [...faces].sort((a, b) => a.timestamp - b.timestamp)
+
+  for (const face of sortedFaces) {
+    // Find existing track that matches this face
+    let matchedTrack: FaceTrack | null = null
+    let bestIOU = 0
+
+    for (const track of tracks) {
+      // Only consider tracks that were seen recently (within 1 second)
+      if (face.timestamp - track.lastSeen > 1) {
+        continue
+      }
+
+      // Get the last face in the track
+      const lastFace = track.faces[track.faces.length - 1]
+
+      // Calculate IOU (Intersection Over Union)
+      const iou = calculateIOU(face, lastFace)
+
+      if (iou > bestIOU && iou > 0.3) {
+        bestIOU = iou
+        matchedTrack = track
+      }
+    }
+
+    if (matchedTrack) {
+      // Add face to existing track
+      face.trackingId = matchedTrack.trackingId
+      matchedTrack.faces.push(face)
+      matchedTrack.lastSeen = face.timestamp
+    } else {
+      // Create new track
+      const trackingId = nextTrackId++
+      face.trackingId = trackingId
+      tracks.push({
+        trackingId,
+        faces: [face],
+        lastSeen: face.timestamp,
+        speakerScore: 0,
+      })
+    }
+  }
+
+  return tracks
+}
+
+/**
+ * Calculate Intersection Over Union for two face bounding boxes
+ */
+function calculateIOU(face1: DetectedFace, face2: DetectedFace): number {
+  const x1 = Math.max(face1.x, face2.x)
+  const y1 = Math.max(face1.y, face2.y)
+  const x2 = Math.min(face1.x + face1.width, face2.x + face2.width)
+  const y2 = Math.min(face1.y + face1.height, face2.y + face2.height)
+
+  if (x2 < x1 || y2 < y1) {
+    return 0
+  }
+
+  const intersection = (x2 - x1) * (y2 - y1)
+  const area1 = face1.width * face1.height
+  const area2 = face2.width * face2.height
+  const union = area1 + area2 - intersection
+
+  return intersection / union
+}
+
+/**
+ * Select the best face track based on strategy
+ */
+function selectBestTrack(
+  tracks: FaceTrack[],
+  strategy: FaceSelectionStrategy,
+  audioMoments: AudioMoment[]
+): FaceTrack | null {
+  if (tracks.length === 0) {
+    return null
+  }
+
+  if (tracks.length === 1) {
+    return tracks[0]
+  }
+
+  switch (strategy) {
+    case 'largest':
+      return selectLargestTrack(tracks)
+    case 'speaker':
+      return selectSpeakerTrack(tracks, audioMoments)
+    case 'center':
+      return selectCenterTrack(tracks)
+    default:
+      return selectLargestTrack(tracks)
+  }
+}
+
+/**
+ * Select track with largest average face size
+ */
+function selectLargestTrack(tracks: FaceTrack[]): FaceTrack {
+  let bestTrack = tracks[0]
+  let bestAvgArea = 0
+
+  for (const track of tracks) {
+    const avgArea =
+      track.faces.reduce((sum, face) => sum + face.width * face.height, 0) /
+      track.faces.length
+
+    if (avgArea > bestAvgArea) {
+      bestAvgArea = avgArea
+      bestTrack = track
+    }
+  }
+
+  return bestTrack
+}
+
+/**
+ * Select track that best correlates with audio moments (speaker)
+ */
+function selectSpeakerTrack(
+  tracks: FaceTrack[],
+  audioMoments: AudioMoment[]
+): FaceTrack {
+  if (audioMoments.length === 0) {
+    // Fall back to largest if no audio data
+    return selectLargestTrack(tracks)
+  }
+
+  // Calculate speaker score for each track
+  for (const track of tracks) {
+    let score = 0
+
+    for (const face of track.faces) {
+      // Find audio moments near this face timestamp (within 0.5s)
+      const nearbyMoments = audioMoments.filter(
+        (m) => Math.abs(m.timestamp - face.timestamp) < 0.5
+      )
+
+      if (nearbyMoments.length > 0) {
+        // Weight by audio moment score and proximity
+        for (const moment of nearbyMoments) {
+          const proximity = 1 - Math.abs(moment.timestamp - face.timestamp) / 0.5
+          score += moment.hydeScore * proximity
+        }
+      }
+    }
+
+    track.speakerScore = score / Math.max(track.faces.length, 1)
+  }
+
+  // Select track with highest speaker score
+  let bestTrack = tracks[0]
+  let bestScore = tracks[0].speakerScore
+
+  for (const track of tracks) {
+    if (track.speakerScore > bestScore) {
+      bestScore = track.speakerScore
+      bestTrack = track
+    }
+  }
+
+  // If no track has audio correlation, fall back to largest
+  if (bestScore === 0) {
+    return selectLargestTrack(tracks)
+  }
+
+  return bestTrack
+}
+
+/**
+ * Select track closest to center of frame
+ */
+function selectCenterTrack(tracks: FaceTrack[]): FaceTrack {
+  let bestTrack = tracks[0]
+  let bestAvgDistanceToCenter = Infinity
+
+  for (const track of tracks) {
+    const avgDistanceToCenter =
+      track.faces.reduce((sum, face) => {
+        const faceCenterX = face.x + face.width / 2
+        const faceCenterY = face.y + face.height / 2
+        // Assume typical video dimensions for center calculation
+        const centerX = 1920 / 2
+        const centerY = 1080 / 2
+        const distance = Math.sqrt(
+          Math.pow(faceCenterX - centerX, 2) + Math.pow(faceCenterY - centerY, 2)
+        )
+        return sum + distance
+      }, 0) / track.faces.length
+
+    if (avgDistanceToCenter < bestAvgDistanceToCenter) {
+      bestAvgDistanceToCenter = avgDistanceToCenter
+      bestTrack = track
+    }
+  }
+
+  return bestTrack
+}
+
+/**
+ * Convert face track to crop keyframes
+ */
+function convertFaceTrackToKeyframes(
+  track: FaceTrack,
+  cropWidth: number,
+  cropHeight: number,
+  sourceWidth: number,
+  sourceHeight: number
+): CropKeyframe[] {
+  const keyframes: CropKeyframe[] = []
+
+  for (const face of track.faces) {
+    // Center crop on face
+    const faceCenterX = face.x + face.width / 2
+    const faceCenterY = face.y + face.height / 2
+
+    // Calculate crop position to center on face
+    let cropX = Math.round(faceCenterX - cropWidth / 2)
+    let cropY = Math.round(faceCenterY - cropHeight / 2)
+
+    // Clamp to source bounds
+    cropX = Math.max(0, Math.min(cropX, sourceWidth - cropWidth))
+    cropY = Math.max(0, Math.min(cropY, sourceHeight - cropHeight))
+
+    keyframes.push({
+      time: face.timestamp,
+      x: cropX,
+      y: cropY,
+      width: cropWidth,
+      height: cropHeight,
+    })
+  }
+
+  return keyframes
 }
 
 /**
