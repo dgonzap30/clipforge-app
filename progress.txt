@@ -1,0 +1,14 @@
+## RecentClips Component Refactoring
+
+### Changes Made:
+- Refactored `src/components/dashboard/RecentClips.tsx` to accept clips as a prop instead of using hardcoded data
+- Added `RecentClipItem` interface for TypeScript type safety with properties: id, title, game, duration, views
+- Added `RecentClipsProps` interface to define component props
+- Updated component to accept optional `clips` prop with default empty array
+- Added empty state message when no clips are available: "No clips yet. Process a VOD to generate clips!"
+- Component now properly renders clip data from props instead of hardcoded values
+
+### Technical Details:
+- The component is backward compatible - it accepts an optional clips array
+- Empty state is displayed when clips array is empty or not provided
+- All existing rendering logic preserved, just using prop data instead of hardcoded data

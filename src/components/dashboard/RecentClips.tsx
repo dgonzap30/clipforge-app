@@ -1,15 +1,19 @@
 import { ArrowRight, Play } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-// Placeholder data
-const recentClips = [
-  { id: '1', title: 'Insane 1v4 clutch', game: 'Valorant', duration: '0:32', views: '12.4K' },
-  { id: '2', title: 'Chat went crazy for this', game: 'Just Chatting', duration: '0:18', views: '8.2K' },
-  { id: '3', title: 'The reaction was priceless', game: 'Minecraft', duration: '0:45', views: '5.1K' },
-  { id: '4', title: 'How did that happen??', game: 'Fortnite', duration: '0:28', views: '3.8K' },
-]
+export interface RecentClipItem {
+  id: string
+  title: string
+  game: string
+  duration: string
+  views: string
+}
 
-export function RecentClips() {
+interface RecentClipsProps {
+  clips?: RecentClipItem[]
+}
+
+export function RecentClips({ clips = [] }: RecentClipsProps) {
   return (
     <div className="card">
       <div className="p-4 border-b border-dark-800 flex items-center justify-between">
@@ -20,7 +24,12 @@ export function RecentClips() {
       </div>
       
       <div className="divide-y divide-dark-800">
-        {recentClips.map((clip) => (
+        {clips.length === 0 ? (
+          <div className="p-8 text-center text-dark-400">
+            <p>No clips yet. Process a VOD to generate clips!</p>
+          </div>
+        ) : (
+          clips.map((clip) => (
           <div key={clip.id} className="p-4 flex items-center gap-4 hover:bg-dark-800/50 transition-colors">
             {/* Thumbnail */}
             <div className="w-24 h-14 bg-dark-800 rounded-lg flex-shrink-0 relative group cursor-pointer">
@@ -46,7 +55,8 @@ export function RecentClips() {
               <p className="text-xs text-dark-500">views</p>
             </div>
           </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   )
