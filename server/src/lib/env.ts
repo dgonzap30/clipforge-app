@@ -2,6 +2,10 @@
 // Create a .env file based on .env.example
 
 export const env = {
+  // Supabase
+  SUPABASE_URL: process.env.SUPABASE_URL || '',
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+
   // Twitch
   TWITCH_CLIENT_ID: process.env.TWITCH_CLIENT_ID || '',
   TWITCH_CLIENT_SECRET: process.env.TWITCH_CLIENT_SECRET || '',
@@ -30,12 +34,12 @@ export const env = {
 // Validate required env vars in production
 export function validateEnv() {
   const required = [
-    'TWITCH_CLIENT_ID',
-    'TWITCH_CLIENT_SECRET',
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
   ]
-  
+
   const missing = required.filter(key => !env[key as keyof typeof env])
-  
+
   if (missing.length > 0 && process.env.NODE_ENV === 'production') {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
   }
