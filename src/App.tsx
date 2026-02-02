@@ -10,7 +10,11 @@ import { AuthCallback } from '@/pages/AuthCallback'
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Layout />}>
+      <Route path="/" element={
+        <ProtectedRoute>
+          <Layout />
+        </ProtectedRoute>
+      }>
         <Route index element={<Dashboard />} />
         <Route path="clips" element={<Clips />} />
         <Route path="queue" element={<Queue />} />
