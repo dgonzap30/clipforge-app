@@ -8,6 +8,7 @@ import { authRoutes } from './routes/auth'
 import { vodsRoutes } from './routes/vods'
 import { clipsRoutes } from './routes/clips'
 import { jobsRoutes } from './routes/jobs'
+import { platformsRoutes } from './routes/platforms'
 import { vodWorker as _vodWorker, closeWorker } from './queue/worker'
 import { redisConnection } from './queue/connection'
 
@@ -44,6 +45,7 @@ app.route('/api/auth', authRoutes)
 app.route('/api/vods', vodsRoutes)
 app.route('/api/clips', clipsRoutes)
 app.route('/api/jobs', jobsRoutes)
+app.route('/api/platforms', platformsRoutes)
 
 // Error handling
 app.onError((err, c) => {
