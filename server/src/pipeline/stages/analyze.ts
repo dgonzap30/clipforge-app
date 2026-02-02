@@ -9,7 +9,7 @@
  */
 
 import { extractAudio, getAudioLevels, analyzeAudioLevels, AudioMoment } from '../../analysis/audio'
-import { fuseSignals, SignalMoment, ViewerClip } from '../../analysis/fusion'
+import { fuseSignals, SignalMoment, ViewerClip, FusionConfig } from '../../analysis/fusion'
 import { ChatMoment } from '../../analysis/chat'
 
 export interface AnalyzeStageInput {
@@ -24,13 +24,8 @@ export interface AnalyzeStageOutput {
   audioPath: string
 }
 
-export interface AnalyzeStageConfig {
+export interface AnalyzeStageConfig extends Partial<FusionConfig> {
   audioOutputPath?: string
-  weights?: {
-    chat: number
-    audio: number
-    clips: number
-  }
 }
 
 const DEFAULT_WEIGHTS = {
@@ -51,7 +46,6 @@ export async function analyze(
   config: AnalyzeStageConfig = {}
 ): Promise<AnalyzeStageOutput> {
   const { videoPath, chatMoments = [], viewerClips = [] } = input
-  const weights = config.weights ?? DEFAULT_WEIGHTS
 
   // Generate audio output path if not provided
   const audioPath = config.audioOutputPath ??
@@ -66,12 +60,14 @@ export async function analyze(
   // Step 3: Analyze audio levels to find moments
   const audioMoments = analyzeAudioLevels(audioLevels)
 
-  // Step 4: Fuse signals with specified weights
+  // Step 4: Fuse signals with config (excluding audioOutputPath)
+  const { audioOutputPath: _audioOutputPath, ...fusionConfig } = config
+  const weights = fusionConfig.weights ?? DEFAULT_WEIGHTS
   const fusedMoments = fuseSignals(
     chatMoments,
     audioMoments,
     viewerClips,
-    { weights }
+    { ...fusionConfig, weights }
   )
 
   return {

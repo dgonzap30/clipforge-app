@@ -37,6 +37,25 @@ export interface TwitchVideo {
   muted_segments: Array<{ duration: number; offset: number }> | null
 }
 
+export interface TwitchClip {
+  id: string
+  url: string
+  embed_url: string
+  broadcaster_id: string
+  broadcaster_name: string
+  creator_id: string
+  creator_name: string
+  video_id: string
+  game_id: string
+  language: string
+  title: string
+  view_count: number
+  created_at: string
+  thumbnail_url: string
+  duration: number // in seconds
+  vod_offset: number | null // offset into VOD in seconds
+}
+
 export interface TwitchTokenResponse {
   access_token: string
   refresh_token: string
@@ -223,16 +242,59 @@ export class TwitchClient {
     first?: number
     started_at?: string
     ended_at?: string
-  } = {}): Promise<{ data: any[]; pagination: { cursor?: string } }> {
+  } = {}): Promise<{ data: TwitchClip[]; pagination: { cursor?: string } }> {
     const params = new URLSearchParams({
       broadcaster_id: broadcasterId,
       first: String(options.first || 20),
     })
-    
+
     if (options.started_at) params.set('started_at', options.started_at)
     if (options.ended_at) params.set('ended_at', options.ended_at)
-    
+
     return this.request(`/clips?${params}`)
+  }
+
+  // Get clips for a specific VOD
+  async getClipsForVOD(videoId: string): Promise<TwitchClip[]> {
+    // First get the video to find the time range
+    const video = await this.getVideo(videoId)
+    if (!video) {
+      return []
+    }
+
+    // Calculate time range for clips (VOD created_at to created_at + duration)
+    const startTime = new Date(video.created_at)
+    const durationSeconds = parseTwitchDuration(video.duration)
+    const endTime = new Date(startTime.getTime() + durationSeconds * 1000)
+
+    // Fetch all clips in that time range
+    const allClips: TwitchClip[] = []
+    let cursor: string | undefined = undefined
+
+    do {
+      const params = new URLSearchParams({
+        broadcaster_id: video.user_id,
+        started_at: startTime.toISOString(),
+        ended_at: endTime.toISOString(),
+        first: '100', // max per request
+      })
+
+      if (cursor) {
+        params.set('after', cursor)
+      }
+
+      const response = await this.request<{ data: TwitchClip[]; pagination: { cursor?: string } }>(
+        `/clips?${params}`
+      )
+
+      // Filter to only clips from this specific VOD
+      const vodClips = response.data.filter(clip => clip.video_id === videoId)
+      allClips.push(...vodClips)
+
+      cursor = response.pagination.cursor
+    } while (cursor)
+
+    return allClips
   }
 }
 

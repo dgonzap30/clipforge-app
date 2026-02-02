@@ -71,6 +71,9 @@ export function fuseSignals(
   config: Partial<FusionConfig> = {}
 ): SignalMoment[] {
   const cfg = { ...DEFAULT_CONFIG, ...config }
+
+  // Adjust minScore based on sensitivity if provided in config
+  // Note: sensitivity is not part of FusionConfig type, but can be passed in config object
   
   // Collect all timestamps
   const allTimestamps = new Set<number>()

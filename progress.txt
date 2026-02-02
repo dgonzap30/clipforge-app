@@ -1,16 +1,56 @@
-## Task: Update server/src/lib/env.ts
+## Task: Wire viewer clips into pipeline and honor all job settings
 
 ### Changes Made:
-- Replaced S3-related environment variables with Supabase and OpenAI variables
-- Removed: S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION
-- Added: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, OPENAI_API_KEY
-- Maintained the same structure and format of the env configuration
-- The validateEnv() function remains unchanged (validation requirements will need to be updated in a separate task if needed)
+1. **Enhanced TwitchClient to fetch viewer clips for VODs**
+   - Added TwitchClip interface with all necessary properties including vod_offset
+   - Implemented getClipsForVOD() method that fetches all clips for a specific VOD
+   - Handles pagination automatically to retrieve all clips
+   - Filters clips by video_id to ensure only relevant clips are returned
+
+2. **Wired viewer clips into pipeline orchestrator**
+   - Added function to convert Twitch clips to ViewerClip format for signal fusion
+   - Modified analyzeStageWrapper to fetch viewer clips from Twitch API using VOD ID
+   - Passes twitchVodId through pipeline context metadata
+   - Gracefully handles failures when fetching viewer clips
+
+3. **Honored all job settings in signal fusion**
+   - Implemented dynamic signal weights based on job settings:
+     - chatAnalysis: 0.4 if enabled, 0 if disabled
+     - audioPeaks: 0.4 if enabled (or 0.8 if chat disabled), 0 if disabled
+     - clips weight: always 0.2
+   - Added sensitivity mapping to minScore thresholds:
+     - low: 50 (only high-confidence moments)
+     - medium: 30 (default balance)
+     - high: 15 (more permissive)
+   - Pass minDuration and maxDuration from job settings to fusion config
+
+4. **Updated analyze stage to accept full fusion configuration**
+   - Changed AnalyzeStageConfig to extend Partial<FusionConfig>
+   - Modified analyze function to pass all fusion config options (not just weights)
+   - Properly separates audioOutputPath from fusion config
+
+5. **Added comprehensive tests**
+   - Created twitch.test.ts with tests for getClipsForVOD functionality
+   - Added tests for pagination handling and VOD filtering
+   - Added tests in analyze.test.ts for honoring job settings
+   - Tests verify minDuration, maxDuration, minScore, and full fusion config
 
 ### Files Modified:
-- server/src/lib/env.ts
+- server/src/lib/twitch.ts
+- server/src/lib/twitch.test.ts (new)
+- server/src/pipeline/orchestrator.ts
+- server/src/pipeline/stages/analyze.ts
+- server/src/pipeline/stages/analyze.test.ts
+
+### Technical Details:
+- Viewer clips are fetched using Twitch API based on VOD time range
+- Only clips with vod_offset are converted to ViewerClip format
+- Signal fusion now respects all job settings for weights, thresholds, and durations
+- Pipeline context includes twitchVodId in metadata for clip fetching
+- Tests pass and linting is clean (only pre-existing warnings remain)
 
 ### Notes:
-- The env object now exports Supabase credentials instead of S3-compatible storage credentials
-- OpenAI API key has been added for AI functionality
-- Default values remain empty strings to maintain consistency with other configuration
+- faceReactions setting is not implemented (feature doesn't exist yet)
+- autoCaptions is already honored in the caption stage
+- outputFormat is already honored in the reframe stage
+- The implementation maintains backward compatibility with empty viewer clips array

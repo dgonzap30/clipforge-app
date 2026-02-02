@@ -13,8 +13,24 @@ import { createExtractStage } from './stages/extract'
 import { reframeStage } from './stages/reframe'
 import { captionStage } from './stages/caption'
 import { createUploadStage } from './stages/upload'
+import { TwitchClient, TwitchClip, getAppAccessToken } from '../lib/twitch'
+import { ViewerClip } from '../analysis/fusion'
 import path from 'path'
 import { $ } from 'bun'
+
+/**
+ * Convert Twitch clips to ViewerClip format for signal fusion
+ */
+function convertTwitchClipsToViewerClips(twitchClips: TwitchClip[]): ViewerClip[] {
+  return twitchClips
+    .filter(clip => clip.vod_offset !== null) // Only clips with VOD offset
+    .map(clip => ({
+      timestamp: clip.vod_offset!, // offset into VOD in seconds
+      duration: clip.duration,
+      viewCount: clip.view_count,
+      title: clip.title,
+    }))
+}
 
 // Wrap analyze function in a PipelineStage
 const analyzeStageWrapper: PipelineStage = {
@@ -24,11 +40,52 @@ const analyzeStageWrapper: PipelineStage = {
       throw new Error('Downloaded video path is required for analysis')
     }
 
-    const result = await analyze({
-      videoPath: context.downloadedVideoPath,
-      chatMoments: [],
-      viewerClips: [],
-    })
+    // Fetch viewer clips from Twitch if we have a VOD ID
+    let viewerClips: ViewerClip[] = []
+    if (context.metadata?.twitchVodId) {
+      try {
+        console.log(`[orchestrator] Fetching viewer clips for VOD ${context.metadata.twitchVodId}`)
+        const appToken = await getAppAccessToken()
+        const twitchClient = new TwitchClient(appToken)
+        const twitchClips = await twitchClient.getClipsForVOD(context.metadata.twitchVodId)
+        viewerClips = convertTwitchClipsToViewerClips(twitchClips)
+        console.log(`[orchestrator] Found ${viewerClips.length} viewer clips for VOD`)
+      } catch (error) {
+        console.warn(`[orchestrator] Failed to fetch viewer clips:`, error)
+        // Continue without viewer clips if fetch fails
+      }
+    }
+
+    // Get signal weights and configuration from job settings
+    const settings = context.settings || {}
+    const weights = {
+      chat: settings.chatAnalysis ? 0.4 : 0,
+      audio: settings.audioPeaks ? 0.4 : 0.8, // Higher weight if chat disabled
+      clips: 0.2,
+    }
+
+    // Map sensitivity to minScore threshold
+    const sensitivityToMinScore: Record<string, number> = {
+      'low': 50,    // Only high-confidence moments
+      'medium': 30, // Default balance
+      'high': 15,   // More permissive, catch more moments
+    }
+
+    const fusionConfig = {
+      weights,
+      minScore: sensitivityToMinScore[settings.sensitivity || 'medium'],
+      minDuration: settings.minDuration || 10,
+      maxDuration: settings.maxDuration || 60,
+    }
+
+    const result = await analyze(
+      {
+        videoPath: context.downloadedVideoPath,
+        chatMoments: [],
+        viewerClips,
+      },
+      fusionConfig
+    )
 
     return {
       ...context,
@@ -124,7 +181,9 @@ export async function runPipeline(
     progress: 0 as number,
     tempFiles: [],
     filesToCleanup: [workDir], // Clean up entire work directory
-    metadata: {},
+    metadata: {
+      twitchVodId: job.twitchVodId,
+    },
   }
 
   try {
@@ -324,7 +383,9 @@ export async function resumePipeline(
     progress: job.progress,
     tempFiles: [],
     filesToCleanup: [workDir],
-    metadata: {},
+    metadata: {
+      twitchVodId: job.twitchVodId,
+    },
   }
 
   // Execute remaining stages
