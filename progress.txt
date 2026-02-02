@@ -1,0 +1,21 @@
+# Task: Wire src/pages/Settings.tsx - Make form controlled via Zustand
+
+## Completed
+- Converted all form inputs from uncontrolled (defaultValue/defaultChecked) to controlled components
+- Imported useStore and Settings type from store
+- Added local form state using useState to track form changes
+- Implemented updateFormData helper to properly update nested settings
+- Connected all form fields to local state:
+  - Detection settings: minDuration, maxDuration, sensitivity
+  - Detection toggles: chatAnalysis, audioPeaks, faceReactions
+  - Output settings: defaultFormat, autoCaptions, captionStyle
+- Implemented handleSave function that calls updateSettings from Zustand store
+- Connected Save button to handleSave handler
+- Zustand persist middleware automatically handles localStorage persistence
+- Verified build passes with no TypeScript errors
+
+## Technical Details
+- Form uses controlled components with value/checked props
+- Local state allows editing without immediate persistence
+- Save button triggers persistence to both Zustand store and localStorage (via persist middleware)
+- All settings maintain proper TypeScript types from store/index.ts
