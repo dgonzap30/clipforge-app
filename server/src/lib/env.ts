@@ -15,6 +15,15 @@ export const env = {
   // OpenAI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
 
+  // Anthropic Claude
+  CLAUDE_API_KEY: process.env.CLAUDE_API_KEY || '',
+
+  // Pexels (for B-roll stock footage)
+  PEXELS_API_KEY: process.env.PEXELS_API_KEY || '',
+
+  // LLM Provider for transcript analysis
+  LLM_PROVIDER: (process.env.LLM_PROVIDER || 'openai') as 'openai' | 'claude',
+
   // Redis (for job queue)
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
 

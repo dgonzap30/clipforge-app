@@ -33,8 +33,8 @@ export async function uploadStage(
   context.currentStage = 'upload'
   context.progress = 0
 
-  // Get clips to upload from previous stages
-  const clipsToUpload = context.captionedClips || context.reframedClips || context.extractedClips
+  // Get clips to upload from previous stages (prioritize B-roll clips if available)
+  const clipsToUpload = context.metadata?.brollClips || context.captionedClips || context.reframedClips || context.extractedClips
 
   if (!clipsToUpload || clipsToUpload.length === 0) {
     throw new Error('No clips available to upload')

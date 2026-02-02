@@ -12,9 +12,11 @@ import { analyze } from './stages/analyze'
 import { createExtractStage } from './stages/extract'
 import { reframeStage } from './stages/reframe'
 import { captionStage } from './stages/caption'
+import { brollStage } from './stages/broll'
 import { createUploadStage } from './stages/upload'
 import path from 'path'
 import { $ } from 'bun'
+import { env } from '../lib/env'
 
 // Wrap analyze function in a PipelineStage
 const analyzeStageWrapper: PipelineStage = {
@@ -51,6 +53,12 @@ const captionStageWrapper: PipelineStage = {
       const result = await captionStage({
         videoPath: clip.path,
         outputDir,
+        config: {
+          output: {
+            saveTranscription: true, // Save for B-roll stage
+            format: 'ass',
+          },
+        },
       })
 
       captionedClips.push({
@@ -58,11 +66,128 @@ const captionStageWrapper: PipelineStage = {
         originalPath: clip.path,
         clipId: clip.clipId,
       })
+
+      // Store transcription path for B-roll stage
+      if (!context.metadata) {
+        context.metadata = {}
+      }
+      if (!context.metadata.transcriptions) {
+        context.metadata.transcriptions = {}
+      }
+      context.metadata.transcriptions[clip.clipId || ''] = result.transcriptionPath
     }
 
     return {
       ...context,
       captionedClips,
+    }
+  },
+}
+
+// Wrap B-roll function in a PipelineStage
+const brollStageWrapper: PipelineStage = {
+  name: 'broll',
+  async execute(context: PipelineContext): Promise<PipelineContext> {
+    const settings = context.settings || {}
+    const brollEnabled = settings.bRoll === true
+    const clips = context.captionedClips || []
+    const outputDir = context.reframedClipsDir || context.workDir
+    const brollClips = []
+
+    if (!brollEnabled) {
+      console.log('[Pipeline] B-roll insertion disabled, skipping')
+      return {
+        ...context,
+        metadata: {
+          ...context.metadata,
+          brollClips: [],
+        },
+      }
+    }
+
+    // Determine LLM API key
+    const llmProvider = env.LLM_PROVIDER
+    const llmApiKey = llmProvider === 'claude'
+      ? env.CLAUDE_API_KEY
+      : env.OPENAI_API_KEY
+
+    if (!llmApiKey) {
+      console.warn('[Pipeline] LLM API key not configured, skipping B-roll')
+      return {
+        ...context,
+        metadata: {
+          ...context.metadata,
+          brollClips: [],
+        },
+      }
+    }
+
+    if (!env.PEXELS_API_KEY) {
+      console.warn('[Pipeline] Pexels API key not configured, skipping B-roll')
+      return {
+        ...context,
+        metadata: {
+          ...context.metadata,
+          brollClips: [],
+        },
+      }
+    }
+
+    const transcriptions = context.metadata?.transcriptions || {}
+
+    for (const clip of clips) {
+      const transcriptionPath = transcriptions[clip.clipId || '']
+
+      if (!transcriptionPath) {
+        console.warn(`[Pipeline] No transcription found for clip ${clip.clipId}, skipping B-roll`)
+        brollClips.push({
+          path: clip.path,
+          originalPath: clip.originalPath,
+          clipId: clip.clipId,
+        })
+        continue
+      }
+
+      try {
+        const result = await brollStage({
+          videoPath: clip.path,
+          transcriptionPath,
+          outputDir,
+          config: {
+            enabled: true,
+            llm: {
+              provider: llmProvider,
+              apiKey: llmApiKey,
+            },
+            pexelsApiKey: env.PEXELS_API_KEY,
+            maxBRolls: settings.maxBRolls || 3,
+            opacity: 0.4,
+            orientation: settings.outputFormat === 'vertical' ? 'portrait' : 'landscape',
+          },
+        })
+
+        brollClips.push({
+          path: result.outputPath,
+          originalPath: clip.path,
+          clipId: clip.clipId,
+        })
+      } catch (err) {
+        console.error(`[Pipeline] B-roll failed for clip ${clip.clipId}:`, err)
+        // Fall back to captioned clip without B-roll
+        brollClips.push({
+          path: clip.path,
+          originalPath: clip.originalPath,
+          clipId: clip.clipId,
+        })
+      }
+    }
+
+    return {
+      ...context,
+      metadata: {
+        ...context.metadata,
+        brollClips,
+      },
     }
   },
 }
@@ -74,6 +199,7 @@ const PIPELINE_STAGES: PipelineStage[] = [
   createExtractStage(),
   reframeStage,
   captionStageWrapper,
+  brollStageWrapper,
   createUploadStage(),
 ]
 
@@ -84,6 +210,7 @@ const STAGE_TO_STATUS: Record<string, JobStatus> = {
   'extract': 'extracting',
   'reframe': 'reframing',
   'caption': 'captioning',
+  'broll': 'captioning', // Use same status as captioning
   'upload': 'completed',
 }
 
