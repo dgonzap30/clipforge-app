@@ -1,0 +1,102 @@
+# useJobProgress Hook Implementation
+
+## Completed Tasks
+
+### 1. Installed @supabase/supabase-js
+- Added Supabase JavaScript client library (v2.x)
+- 254 packages installed successfully
+
+### 2. Created Supabase Client Configuration (src/lib/supabase.ts)
+- Configured singleton Supabase client instance
+- Added TypeScript database schema types for jobs table
+- Environment variable support (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+- Graceful fallback when credentials not configured
+- Realtime configuration with eventsPerSecond limit
+- Auth persistence enabled
+
+### 3. Implemented useJobProgress Hook (src/hooks/useJobProgress.ts)
+A comprehensive React hook for real-time job progress monitoring using Supabase Realtime subscriptions.
+
+Features:
+- Real-time subscription to job table changes (UPDATE and DELETE events)
+- Automatic job data transformation from snake_case DB schema to camelCase API format
+- Loading states and error handling
+- Optional initial data fetch
+- Subscription status tracking
+- Manual refresh capability
+- Lifecycle callbacks (onUpdate, onComplete)
+- Proper cleanup on unmount
+- TypeScript types with full JSDoc documentation
+
+Hook API:
+- Parameters:
+  - jobId: string | null - Job to monitor
+  - options: UseJobProgressOptions - Configuration (fetchInitial, onUpdate, onComplete)
+
+- Returns:
+  - job: ProcessingJob | null - Current job data
+  - loading: boolean - Initial fetch loading state
+  - error: string | null - Error messages
+  - subscribed: boolean - Realtime subscription status
+  - refresh: () => Promise<void> - Manual refresh function
+
+### 4. Updated Exports (src/hooks/index.ts)
+- Exported new useJobProgress hook
+- Renamed existing polling hook to useJobProgressPolling to avoid naming conflicts
+- Maintains backward compatibility
+
+## Technical Notes
+
+### Database Schema
+The hook expects a Supabase `jobs` table with columns:
+- id, vod_id, vod_url, title, channel_login, duration
+- status, progress, current_step, clips_found, clip_ids
+- error, created_at, updated_at, completed_at
+- settings (JSONB with processing configuration)
+
+### Environment Configuration Required
+Add to .env:
+```
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### Realtime Setup Required
+Enable Realtime on the jobs table in Supabase:
+1. Navigate to Database > Replication
+2. Enable replication for the jobs table
+3. Configure Row Level Security policies as needed
+
+### Testing
+No test framework is currently set up in the project. Tests should be added when vitest or jest is configured.
+
+## Files Created/Modified
+- Created: src/lib/supabase.ts (83 lines)
+- Created: src/hooks/useJobProgress.ts (247 lines)
+- Modified: src/hooks/index.ts (added export)
+- Modified: package.json (added @supabase/supabase-js)
+
+## Usage Example
+```tsx
+function JobMonitor({ jobId }: { jobId: string }) {
+  const { job, loading, error, subscribed } = useJobProgress(jobId, {
+    onComplete: (job) => {
+      if (job.status === 'completed') {
+        toast.success('Job completed!')
+      }
+    }
+  })
+
+  if (loading) return <Spinner />
+  if (error) return <Error message={error} />
+
+  return (
+    <div>
+      <h2>{job.title}</h2>
+      <ProgressBar value={job.progress} />
+      <p>{job.currentStep}</p>
+      {subscribed && <Badge>Live</Badge>}
+    </div>
+  )
+}
+```
