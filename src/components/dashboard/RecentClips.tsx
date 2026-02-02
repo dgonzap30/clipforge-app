@@ -1,5 +1,6 @@
 import { ArrowRight, Play } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { Clip } from '@/lib/api'
 
 export interface RecentClipItem {
   id: string
@@ -22,7 +23,7 @@ export function RecentClips({ clips = [] }: RecentClipsProps) {
           View all <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
-      
+
       <div className="divide-y divide-dark-800">
         {clips.length === 0 ? (
           <div className="p-8 text-center text-dark-400">
@@ -33,26 +34,39 @@ export function RecentClips({ clips = [] }: RecentClipsProps) {
           <div key={clip.id} className="p-4 flex items-center gap-4 hover:bg-dark-800/50 transition-colors">
             {/* Thumbnail */}
             <div className="w-24 h-14 bg-dark-800 rounded-lg flex-shrink-0 relative group cursor-pointer">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Play className="w-4 h-4 text-white fill-white" />
+              {clip.thumbnailUrl ? (
+                <img
+                  src={clip.thumbnailUrl}
+                  alt={clip.title}
+                  className="w-full h-full object-cover rounded-lg"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Play className="w-4 h-4 text-white fill-white" />
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/80 rounded text-xs font-mono">
-                {clip.duration}
+                {formatDuration(clip.duration)}
               </div>
             </div>
-            
+
             {/* Info */}
             <div className="flex-1 min-w-0">
               <h3 className="font-medium truncate">{clip.title}</h3>
-              <p className="text-sm text-dark-400">{clip.game}</p>
+              <p className="text-sm text-dark-400">
+                {clip.status === 'processing' && 'Processing...'}
+                {clip.status === 'ready' && 'Ready'}
+                {clip.status === 'exported' && 'Exported'}
+                {clip.status === 'failed' && 'Failed'}
+              </p>
             </div>
-            
-            {/* Views */}
+
+            {/* HYDE Score */}
             <div className="text-right flex-shrink-0">
-              <p className="font-medium">{clip.views}</p>
-              <p className="text-xs text-dark-500">views</p>
+              <p className="font-medium">{formatScore(clip.hydeScore)}</p>
+              <p className="text-xs text-dark-500">score</p>
             </div>
           </div>
           ))
