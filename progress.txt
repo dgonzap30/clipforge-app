@@ -1,0 +1,14 @@
+Created src/hooks/useVods.ts with hooks for VOD fetching:
+- useUserVods: Fetches authenticated user's VODs via api.vods.getMine()
+- useChannelVods: Fetches VODs for a specific channel via api.vods.getByChannel()
+- useVodDetails: Fetches detailed info for a single VOD via api.vods.getById()
+- useChannelClips: Fetches Twitch clips for a channel via api.vods.getClips()
+
+All hooks follow the existing pattern in useJobs.ts with useState/useEffect.
+Each hook provides: data, loading, error states, and a refresh function.
+Hooks handle null inputs gracefully and clean up on unmount.
+
+Updated src/hooks/index.ts to export all new VOD hooks.
+
+Note: Task description mentioned TanStack Query but it's not installed in package.json.
+Implemented using the existing useState/useEffect pattern to match the codebase style.
