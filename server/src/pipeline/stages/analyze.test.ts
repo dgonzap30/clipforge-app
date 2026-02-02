@@ -2,17 +2,20 @@
  * Tests for the analysis pipeline stage
  */
 
-import { describe, test, expect, beforeEach, spyOn, afterEach } from 'bun:test'
+import { describe, test, expect, beforeEach, spyOn, afterEach, type Mock } from 'bun:test'
 import { analyze, analyzeWithDefaultWeights, type AnalyzeStageInput } from './analyze'
 import type { ChatMoment } from '../../analysis/chat'
 import type { ViewerClip } from '../../analysis/fusion'
 import * as audio from '../../analysis/audio'
 import * as fusion from '../../analysis/fusion'
+import * as chat from '../../analysis/chat'
 
-let extractAudioSpy: any
-let getAudioLevelsSpy: any
-let analyzeAudioLevelsSpy: any
-let fuseSignalsSpy: any
+let extractAudioSpy: Mock<typeof audio.extractAudio>
+let getAudioLevelsSpy: Mock<typeof audio.getAudioLevels>
+let analyzeAudioLevelsSpy: Mock<typeof audio.analyzeAudioLevels>
+let fuseSignalsSpy: Mock<typeof fusion.fuseSignals>
+let fetchChatLogsSpy: Mock<typeof chat.fetchChatLogs>
+let analyzeChatLogsSpy: Mock<typeof chat.analyzeChatLogs>
 
 describe('analyze', () => {
   beforeEach(() => {
@@ -63,6 +66,10 @@ describe('analyze', () => {
         },
       },
     ])
+
+    // Mock chat module functions
+    fetchChatLogsSpy = spyOn(chat, 'fetchChatLogs').mockResolvedValue([])
+    analyzeChatLogsSpy = spyOn(chat, 'analyzeChatLogs').mockReturnValue([])
   })
 
   afterEach(() => {
@@ -70,6 +77,8 @@ describe('analyze', () => {
     getAudioLevelsSpy?.mockRestore()
     analyzeAudioLevelsSpy?.mockRestore()
     fuseSignalsSpy?.mockRestore()
+    fetchChatLogsSpy?.mockRestore()
+    analyzeChatLogsSpy?.mockRestore()
   })
 
   test('should process video through full pipeline', async () => {
@@ -128,7 +137,7 @@ describe('analyze', () => {
     await analyze(input, { weights: customWeights })
 
     expect(fusion.fuseSignals).toHaveBeenCalledTimes(1)
-    const call = (fusion.fuseSignals as any).mock.calls[0]
+    const call = fuseSignalsSpy.mock.calls[0]
     expect(call[3]).toEqual({
       weights: customWeights,
     })
@@ -142,11 +151,11 @@ describe('analyze', () => {
     await analyze(input)
 
     expect(fusion.fuseSignals).toHaveBeenCalledTimes(1)
-    const call = (fusion.fuseSignals as any).mock.calls[0]
+    const call = fuseSignalsSpy.mock.calls[0]
     expect(call[3]).toEqual({
       weights: {
-        chat: 0,
-        audio: 0.8,
+        chat: 0.4,
+        audio: 0.4,
         clips: 0.2,
       },
     })
@@ -157,9 +166,9 @@ describe('analyze', () => {
       {
         timestamp: 1.5,
         velocity: 10,
+        emoteScore: 2.5,
         hydeScore: 80,
-        messageCount: 50,
-        topEmotes: ['Pog', 'KEKW'],
+        peakMessages: ['PogChamp!', 'LETS GO!'],
       },
     ]
 
@@ -198,13 +207,74 @@ describe('analyze', () => {
     const lastCall = calls[calls.length - 1]
     expect(lastCall[2]).toEqual(viewerClips)
   })
+
+  test('should fetch and analyze chat logs when vodId is provided', async () => {
+    const mockChatMessages = [
+      { timestamp: 10, username: 'user1', message: 'PogChamp!' },
+      { timestamp: 11, username: 'user2', message: 'LETS GO!' },
+    ]
+    const mockChatMoments: ChatMoment[] = [
+      {
+        timestamp: 10,
+        velocity: 5,
+        emoteScore: 1.5,
+        hydeScore: 75,
+        peakMessages: ['PogChamp!', 'LETS GO!'],
+      },
+    ]
+
+    fetchChatLogsSpy.mockResolvedValue(mockChatMessages)
+    analyzeChatLogsSpy.mockReturnValue(mockChatMoments)
+
+    const input: AnalyzeStageInput = {
+      videoPath: '/path/to/video.mp4',
+      vodId: '123456789',
+    }
+
+    await analyze(input)
+
+    expect(chat.fetchChatLogs).toHaveBeenCalledWith('123456789')
+    expect(chat.analyzeChatLogs).toHaveBeenCalledWith(mockChatMessages)
+
+    // Verify chat moments were passed to fuseSignals
+    const calls = fuseSignalsSpy.mock.calls
+    const lastCall = calls[calls.length - 1]
+    expect(lastCall[0]).toEqual(mockChatMoments)
+  })
+
+  test('should not fetch chat logs when vodId is not provided', async () => {
+    const input: AnalyzeStageInput = {
+      videoPath: '/path/to/video.mp4',
+    }
+
+    await analyze(input)
+
+    expect(chat.fetchChatLogs).not.toHaveBeenCalled()
+    expect(chat.analyzeChatLogs).not.toHaveBeenCalled()
+  })
+
+  test('should continue pipeline when chat fetching fails', async () => {
+    fetchChatLogsSpy.mockRejectedValue(new Error('Network error'))
+
+    const input: AnalyzeStageInput = {
+      videoPath: '/path/to/video.mp4',
+      vodId: '123456789',
+    }
+
+    const result = await analyze(input)
+
+    // Pipeline should continue despite chat fetch failure
+    expect(result).toBeDefined()
+    expect(result.audioMoments).toHaveLength(2)
+    expect(result.fusedMoments).toHaveLength(2)
+  })
 })
 
 describe('analyzeWithDefaultWeights', () => {
-  let extractAudioSpy2: any
-  let getAudioLevelsSpy2: any
-  let analyzeAudioLevelsSpy2: any
-  let fuseSignalsSpy2: any
+  let extractAudioSpy2: Mock<typeof audio.extractAudio>
+  let getAudioLevelsSpy2: Mock<typeof audio.getAudioLevels>
+  let analyzeAudioLevelsSpy2: Mock<typeof audio.analyzeAudioLevels>
+  let fuseSignalsSpy2: Mock<typeof fusion.fuseSignals>
 
   beforeEach(() => {
     extractAudioSpy2 = spyOn(audio, 'extractAudio').mockResolvedValue(undefined)
@@ -220,15 +290,15 @@ describe('analyzeWithDefaultWeights', () => {
     fuseSignalsSpy2?.mockRestore()
   })
 
-  test('should use default weights (chat:0, audio:0.8, clips:0.2)', async () => {
+  test('should use default weights (chat:0.4, audio:0.4, clips:0.2)', async () => {
     await analyzeWithDefaultWeights('/path/to/video.mp4')
 
     expect(fuseSignalsSpy2).toHaveBeenCalledTimes(1)
     const call = fuseSignalsSpy2.mock.calls[0]
     expect(call[3]).toEqual({
       weights: {
-        chat: 0,
-        audio: 0.8,
+        chat: 0.4,
+        audio: 0.4,
         clips: 0.2,
       },
     })
@@ -239,9 +309,9 @@ describe('analyzeWithDefaultWeights', () => {
       {
         timestamp: 5,
         velocity: 8,
+        emoteScore: 1.8,
         hydeScore: 75,
-        messageCount: 30,
-        topEmotes: ['LUL'],
+        peakMessages: ['LUL', 'KEKW'],
       },
     ]
 

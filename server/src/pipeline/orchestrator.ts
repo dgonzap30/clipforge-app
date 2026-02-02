@@ -27,7 +27,7 @@ const analyzeStageWrapper: PipelineStage = {
 
     const result = await analyze({
       videoPath: context.downloadedVideoPath,
-      chatMoments: [],
+      vodId: context.vodId,
       viewerClips: [],
     })
 

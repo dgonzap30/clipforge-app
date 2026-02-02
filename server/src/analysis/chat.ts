@@ -230,24 +230,56 @@ export function parseChatLog(rawLog: string): ChatMessage[] {
 
 /**
  * Fetch chat logs for a VOD
- * 
+ *
  * Note: Twitch doesn't provide a direct API for this.
- * Options:
- * 1. Use video comments API (limited)
- * 2. Use third-party services (logs.ivr.fi)
- * 3. Record IRC during live stream
+ * We use the third-party service api.ivr.fi which aggregates chat logs.
  */
 export async function fetchChatLogs(vodId: string): Promise<ChatMessage[]> {
-  // TODO: Implement actual chat log fetching
-  // For now, return empty array - this needs external service integration
-  
-  console.log(`Fetching chat logs for VOD ${vodId}...`)
-  
-  // Option 1: Try Twitch video comments API
-  // This is rate-limited and may not have all messages
-  
-  // Option 2: Try third-party service
-  // const response = await fetch(`https://logs.ivr.fi/vod/${vodId}`)
-  
-  return []
+  console.log(`[chat] Fetching chat logs for VOD ${vodId}...`)
+
+  try {
+    // Use api.ivr.fi to fetch chat logs
+    const response = await fetch(`https://api.ivr.fi/v2/twitch/video/${vodId}/comments`)
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`[chat] No chat logs found for VOD ${vodId}`)
+        return []
+      }
+      throw new Error(`Failed to fetch chat logs: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+
+    // The API returns an array of comment objects
+    // Format: { contentOffsetSeconds: number, commenter: { displayName: string }, message: { fragments: Array<{ text: string }> } }
+    if (!Array.isArray(data)) {
+      console.warn(`[chat] Unexpected response format from ivr.fi API`)
+      return []
+    }
+
+    interface IVRComment {
+      contentOffsetSeconds?: number
+      commenter?: {
+        displayName?: string
+      }
+      message?: {
+        fragments?: Array<{ text: string }>
+      }
+    }
+
+    const messages: ChatMessage[] = data.map((comment: IVRComment) => ({
+      timestamp: comment.contentOffsetSeconds || 0,
+      username: comment.commenter?.displayName || 'Anonymous',
+      message: comment.message?.fragments?.map((f) => f.text).join('') || '',
+    }))
+
+    console.log(`[chat] Fetched ${messages.length} chat messages for VOD ${vodId}`)
+    return messages
+
+  } catch (error) {
+    // Don't fail the pipeline if chat fetching fails
+    console.warn(`[chat] Failed to fetch chat logs for VOD ${vodId}:`, error)
+    return []
+  }
 }

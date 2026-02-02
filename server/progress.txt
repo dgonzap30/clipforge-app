@@ -128,3 +128,75 @@
 - Tests validate structure, behavior, and edge cases
 - Includes mathematical validation of interpolation formulas
 - Tests both face-aware and center-only zoom behaviors
+
+## Completed: Chat Log Fetching and Chat Weight Restoration
+
+### Modified Files:
+
+1. **server/src/analysis/chat.ts**
+   - Implemented fetchChatLogs() function to fetch chat logs from api.ivr.fi
+   - Uses third-party service to retrieve Twitch VOD chat comments
+   - Parses IVR API response format: contentOffsetSeconds, commenter.displayName, message.fragments
+   - Returns ChatMessage[] with timestamps and content
+   - Graceful error handling - returns empty array on failure without breaking pipeline
+   - Added proper TypeScript interface (IVRComment) for API response typing
+
+2. **server/src/pipeline/stages/analyze.ts**
+   - Added vodId to AnalyzeStageInput interface
+   - Imported fetchChatLogs and analyzeChatLogs from chat module
+   - Modified analyze() function to:
+     - Fetch chat logs when vodId is provided
+     - Call analyzeChatLogs() to process fetched messages
+     - Use fetched chat moments in signal fusion
+     - Fall back to empty array if chat fetch fails (doesn't break pipeline)
+   - Updated DEFAULT_WEIGHTS to restore chat weight from 0 to 0.4 (original default)
+   - Changed audio weight from 0.8 to 0.4 to balance with chat weight
+
+3. **server/src/pipeline/orchestrator.ts**
+   - Updated analyzeStageWrapper to pass vodId from context to analyze stage
+   - Removed hardcoded empty chatMoments array
+   - Pipeline now fetches chat data automatically during analysis
+
+4. **server/src/analysis/chat.test.ts** (New File)
+   - Created comprehensive test suite with 12 tests
+   - Tests for parseChatLog(): format parsing, empty input, invalid lines, timestamp conversion
+   - Tests for analyzeChatLogs(): high velocity detection, hype emotes, caps messages, overlapping moment merging, custom config
+   - Tests for fetchChatLogs(): 404 handling, network error resilience
+   - All tests pass successfully
+
+5. **server/src/pipeline/stages/analyze.test.ts**
+   - Updated default weight expectations (chat: 0.4, audio: 0.4, clips: 0.2)
+   - Fixed ChatMoment interface usage (removed messageCount and topEmotes, added emoteScore and peakMessages)
+   - Added tests for vodId functionality:
+     - Test that chat logs are fetched when vodId is provided
+     - Test that chat logs are not fetched when vodId is missing
+     - Test that pipeline continues when chat fetching fails
+   - Added mock spies for fetchChatLogs and analyzeChatLogs
+   - Fixed TypeScript types (replaced 'any' with Mock<typeof ...>)
+   - All tests pass successfully
+
+### Features Implemented:
+- Automatic chat log fetching during pipeline analysis stage
+- Integration with api.ivr.fi third-party service for chat data
+- Chat moment detection with configurable weights (restored to 0.4)
+- Signal fusion now includes chat, audio, and viewer clips with balanced weights
+- Error resilience - chat fetch failures don't break the pipeline
+- Comprehensive test coverage for chat functionality
+
+### Acceptance Criteria Met:
+✅ Chat logs are fetched for VODs with valid vodId
+✅ Chat moments appear in analysis output with hydeScore values
+✅ Pipeline completes successfully with chat weight = 0.4
+✅ If chat fetch fails, pipeline continues with empty chat array
+✅ All tests pass (12 new chat tests + 12 updated analyze tests)
+✅ Linting passes for all modified files
+
+### Technical Details:
+- Uses api.ivr.fi/v2/twitch/video/{vodId}/comments endpoint
+- Parses chat message timestamps, usernames, and message fragments
+- Chat analysis algorithm unchanged - now has real data source
+- Sliding window analysis (10s windows, 2s steps) to detect hype moments
+- Emote scoring with weighted hype emote detection
+- CAPS and repeated character detection for excitement indicators
+- Moment merging to avoid overlapping detections
+- TypeScript interfaces for API responses to avoid 'any' types

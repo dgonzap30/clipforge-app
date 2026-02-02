@@ -10,10 +10,11 @@
 
 import { extractAudio, getAudioLevels, analyzeAudioLevels, AudioMoment } from '../../analysis/audio'
 import { fuseSignals, SignalMoment, ViewerClip } from '../../analysis/fusion'
-import { ChatMoment } from '../../analysis/chat'
+import { ChatMoment, fetchChatLogs, analyzeChatLogs } from '../../analysis/chat'
 
 export interface AnalyzeStageInput {
   videoPath: string
+  vodId?: string
   chatMoments?: ChatMoment[]
   viewerClips?: ViewerClip[]
 }
@@ -34,8 +35,8 @@ export interface AnalyzeStageConfig {
 }
 
 const DEFAULT_WEIGHTS = {
-  chat: 0,
-  audio: 0.8,
+  chat: 0.4,
+  audio: 0.4,
   clips: 0.2,
 }
 
@@ -50,23 +51,37 @@ export async function analyze(
   input: AnalyzeStageInput,
   config: AnalyzeStageConfig = {}
 ): Promise<AnalyzeStageOutput> {
-  const { videoPath, chatMoments = [], viewerClips = [] } = input
+  const { videoPath, vodId, chatMoments: providedChatMoments, viewerClips = [] } = input
   const weights = config.weights ?? DEFAULT_WEIGHTS
 
   // Generate audio output path if not provided
   const audioPath = config.audioOutputPath ??
     videoPath.replace(/\.[^.]+$/, '_audio.wav')
 
-  // Step 1: Extract audio from video
+  // Step 1: Fetch and analyze chat logs if vodId is provided
+  let chatMoments: ChatMoment[] = []
+  if (vodId) {
+    try {
+      const chatLogs = await fetchChatLogs(vodId)
+      chatMoments = analyzeChatLogs(chatLogs)
+      console.log(`[analyze] Found ${chatMoments.length} chat moments from ${chatLogs.length} messages`)
+    } catch (error) {
+      console.warn(`[analyze] Chat analysis failed, continuing without chat data:`, error)
+    }
+  } else if (providedChatMoments) {
+    chatMoments = providedChatMoments
+  }
+
+  // Step 2: Extract audio from video
   await extractAudio(videoPath, audioPath)
 
-  // Step 2: Get audio amplitude levels
+  // Step 3: Get audio amplitude levels
   const audioLevels = await getAudioLevels(audioPath)
 
-  // Step 3: Analyze audio levels to find moments
+  // Step 4: Analyze audio levels to find moments
   const audioMoments = analyzeAudioLevels(audioLevels)
 
-  // Step 4: Fuse signals with specified weights
+  // Step 5: Fuse signals with specified weights
   const fusedMoments = fuseSignals(
     chatMoments,
     audioMoments,
