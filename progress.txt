@@ -1,0 +1,52 @@
+## Caption Pipeline Stage Implementation
+
+### Created Files:
+1. `server/src/pipeline/stages/caption.ts` - Main caption pipeline wrapper
+2. `server/src/pipeline/stages/caption.test.ts` - Comprehensive test suite
+
+### Implementation Details:
+
+#### caption.ts Features:
+- **Main Function**: `captionStage()` orchestrates the complete captioning workflow
+  1. Transcribes audio using Whisper (API or local)
+  2. Generates TikTok-style ASS subtitle file with word-level highlighting
+  3. Burns captions into video using FFmpeg
+
+- **Configuration Options**:
+  - Transcription method (API with OpenAI key or local Whisper)
+  - Whisper model selection (tiny, base, small, medium, large)
+  - Language specification
+  - ASS styling (font size, font name, colors, position)
+  - Output options (save transcription JSON, format selection)
+
+- **Convenience Functions**:
+  - `captionStageWithAPI()` - Simplified API-based transcription
+  - `captionStageWithLocal()` - Simplified local Whisper transcription
+
+- **Return Value**: Includes transcription data, ASS file path, output video path, and optional transcription JSON path
+
+#### Test Coverage:
+- Full pipeline execution with API method
+- Full pipeline execution with local method
+- Default configuration handling
+- Error handling for missing API key
+- Transcription save option testing
+- Convenience function testing
+- Integration flow validation
+- Custom styling option handling
+
+### Technical Approach:
+- Wraps existing functions from `server/src/captions/transcribe.ts`:
+  - `transcribeWithWhisperAPI`
+  - `transcribeWithLocalWhisper`
+  - `generateTikTokASS`
+  - `burnCaptions`
+- Provides clean, type-safe pipeline interface
+- Follows existing codebase patterns
+- Comprehensive error handling
+- Console logging for pipeline progress
+
+### Dependencies:
+- Uses existing transcription module
+- Node.js fs/promises for file operations
+- Path module for file path handling
