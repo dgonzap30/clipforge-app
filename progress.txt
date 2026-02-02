@@ -1,0 +1,107 @@
+# Progress Log
+
+## Task: Create server/src/pipeline/orchestrator.ts
+
+### Implementation Summary
+
+Created a complete pipeline orchestration system for VOD processing with the following components:
+
+#### 1. Pipeline Types (`server/src/pipeline/types.ts`)
+- Defined `PipelineContext` interface to track job state, file paths, and progress
+- Defined `PipelineStage` interface for modular stage execution
+- Defined `PipelineConfig` for retry and progress callback configuration
+- Created `PipelineError` class for structured error handling
+
+#### 2. Pipeline Stages (`server/src/pipeline/stages/`)
+Created all 6 processing stages:
+
+**download.ts**
+- Downloads VOD using yt-dlp with real-time progress parsing
+- Tracks download progress (0-15%)
+- Retryable with 3 max retries
+
+**analyze.ts**
+- Extracts audio from VOD
+- Analyzes audio levels to detect hype moments
+- Fuses signals (audio + chat) to find clip moments
+- Tracks progress (15-40%)
+- Configurable sensitivity based on job settings
+
+**extract.ts**
+- Extracts clips from VOD based on analysis results
+- Uses batch processing with concurrency control
+- Tracks progress (40-55%)
+- Creates thumbnails for each clip
+
+**reframe.ts**
+- Converts clips to target aspect ratio (9:16 for vertical)
+- Uses center crop strategy (face tracking available but disabled for MVP)
+- Supports multiple output formats
+- Tracks progress (55-70%)
+
+**caption.ts**
+- Transcribes clips using OpenAI Whisper API
+- Generates TikTok-style ASS captions with word highlighting
+- Burns captions into video using FFmpeg
+- Gracefully handles missing API key
+- Tracks progress (70-85%)
+
+**upload.ts**
+- Uploads finished clips to Supabase Storage
+- Creates clip records in database
+- Tracks progress (85-100%)
+- Retryable with 3 max retries
+
+#### 3. Orchestrator (`server/src/pipeline/orchestrator.ts`)
+Core features:
+- **Stage Sequencing**: Executes all 6 stages in order
+- **Retry Logic**: Configurable retries per stage with exponential backoff
+- **Progress Reporting**: Calls progress callback after each stage with status/progress
+- **Cleanup on Failure**: Automatically removes temporary files and directories
+- **Resume Support**: Can resume pipeline from any failed stage
+- **Database Integration**: Progress callback updates job records in real-time
+- **Error Handling**: Structured error propagation with PipelineError
+
+Key functions:
+- `runPipeline()`: Main entry point for running complete pipeline
+- `executeStageWithRetry()`: Handles retry logic for individual stages
+- `cleanup()`: Removes temporary files and directories
+- `createDatabaseProgressCallback()`: Factory for DB update callback
+- `resumePipeline()`: Resume from specific stage after failure
+
+#### 4. Tests (`server/src/pipeline/orchestrator.test.ts`)
+- Unit tests for progress callback creation
+- Tests for context state management
+- Tests for error handling configuration
+- All 7 tests passing ✓
+
+### Integration Points
+
+The orchestrator is designed to integrate with:
+1. **BullMQ Worker**: Worker calls `runPipeline()` for each job
+2. **Job Routes**: Uses `createDatabaseProgressCallback()` to update job status
+3. **Supabase**: Stores clips and progress in database
+4. **Storage**: Uploads final clips to Supabase Storage
+
+### Next Steps (for other tasks)
+- Create `server/src/queue/processingQueue.ts` to enqueue jobs
+- Create `server/src/queue/worker.ts` to consume jobs and call orchestrator
+- Update `server/src/routes/jobs.ts` POST handler to use queue
+- Wire up orchestrator in `server/src/index.ts`
+
+### File Structure Created
+```
+server/src/pipeline/
+├── types.ts                 # Type definitions
+├── orchestrator.ts          # Main orchestrator
+├── orchestrator.test.ts     # Tests
+└── stages/
+    ├── download.ts          # VOD download stage
+    ├── analyze.ts           # Audio analysis stage
+    ├── extract.ts           # Clip extraction stage
+    ├── reframe.ts           # Vertical reframing stage
+    ├── caption.ts           # Caption generation stage
+    └── upload.ts            # Supabase upload stage
+```
+
+Total: 9 files created, ~1000 lines of code, all tests passing.
