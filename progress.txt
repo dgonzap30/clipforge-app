@@ -1,0 +1,37 @@
+## Task: Wire src/pages/Clips.tsx
+
+### Completed:
+1. Created useClips hook (src/hooks/useClips.ts)
+   - Fetches clips from API with filtering and pagination support
+   - Supports status filtering (ready, processing, exported, failed)
+   - Auto-polling for processing clips
+   - CRUD operations: update, delete, bulkDelete, bulkExport
+
+2. Created ClipPlayerModal component (src/components/clips/ClipPlayerModal.tsx)
+   - Video player with controls
+   - Displays clip metadata (title, duration, HYDE score, status)
+   - Shows detection signals (chat velocity, audio peak, face reaction, viewer clips)
+   - Actions: download, share, edit title
+   - Keyboard support (ESC to close)
+   - Backdrop click to close
+
+3. Wired up Clips.tsx page
+   - Replaced mockClips with useClips hook
+   - Added status filter dropdown (all, ready, processing, exported, failed)
+   - Implemented pagination with Previous/Next buttons (20 items per page)
+   - Wired delete action with confirmation dialog
+   - Wired download action with blob download
+   - Integrated ClipPlayerModal on clip click
+   - Loading, error, and empty states
+   - Grid/list view toggle preserved
+   - Displays clip thumbnails, duration, status badges, HYDE scores
+   - Hover actions on clip cards
+
+4. Updated hooks exports (src/hooks/index.ts)
+   - Exported useClips hook
+
+### Files Modified:
+- src/pages/Clips.tsx
+- src/hooks/useClips.ts (new)
+- src/hooks/index.ts
+- src/components/clips/ClipPlayerModal.tsx (new)
