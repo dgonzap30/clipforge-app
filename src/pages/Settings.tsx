@@ -199,6 +199,23 @@ export function Settings() {
               <option value="tiktok">TikTok - Word-by-word animation</option>
             </select>
           </div>
+
+          <div>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.output.enableEmojis}
+                onChange={(e) => updateFormData({
+                  output: { ...formData.output, enableEmojis: e.target.checked }
+                })}
+                className="w-5 h-5 rounded border-dark-600 bg-dark-800 text-forge-500 focus:ring-forge-500"
+              />
+              <div>
+                <span className="font-medium">Enable Emojis</span>
+                <p className="text-sm text-dark-400">Add contextual emojis to captions based on keywords</p>
+              </div>
+            </label>
+          </div>
         </div>
       </section>
       

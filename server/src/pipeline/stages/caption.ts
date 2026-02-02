@@ -35,6 +35,8 @@ export interface CaptionConfig {
     highlightColor?: string
     outlineColor?: string
     position?: 'bottom' | 'center' | 'top'
+    emojis?: boolean // Enable contextual emoji insertion
+    emojiAnimation?: boolean // Enable emoji scale animation
   }
 
   // Output settings

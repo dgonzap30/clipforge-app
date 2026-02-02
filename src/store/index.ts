@@ -15,6 +15,7 @@ export interface Settings {
     defaultFormat: 'vertical' | 'square' | 'horizontal'
     autoCaptions: boolean
     captionStyle: 'minimal' | 'bold' | 'tiktok'
+    enableEmojis: boolean
   }
 }
 
@@ -52,6 +53,7 @@ const defaultSettings: Settings = {
     defaultFormat: 'vertical',
     autoCaptions: true,
     captionStyle: 'tiktok',
+    enableEmojis: true,
   },
 }
 
