@@ -1,0 +1,20 @@
+# Progress Log
+
+## Update server/package.json: add @supabase/supabase-js, remove AWS SDK packages
+
+**Completed:**
+1. Updated server/package.json:
+   - Added @supabase/supabase-js@^2.47.0 to dependencies
+   - Removed @aws-sdk/client-s3@^3.700.0 from dependencies
+   - Removed @aws-sdk/s3-request-presigner@^3.700.0 from dependencies
+2. Ran `bun install` successfully
+   - Installed @supabase/supabase-js@2.93.3
+   - Removed AWS SDK packages
+   - Updated bun.lockb with new dependency tree
+
+**Files Modified:**
+- server/package.json
+
+**Next Steps:**
+- Update any code that imports from @aws-sdk packages to use @supabase/supabase-js instead
+- Configure Supabase client with appropriate credentials
