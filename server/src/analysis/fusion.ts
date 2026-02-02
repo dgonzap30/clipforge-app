@@ -8,6 +8,7 @@
 import { ChatMoment } from './chat'
 import { AudioMoment } from './audio'
 import { VisualMoment } from './visual'
+import { TranscriptMoment } from './transcript'
 
 export interface SignalMoment {
   timestamp: number
@@ -19,6 +20,7 @@ export interface SignalMoment {
     audio?: { score: number; type: string }
     clips?: { score: number; count: number }
     visual?: { score: number; type: string; description: string }
+    transcript?: { score: number; type: string; excerpt: string }
   }
   suggestedTitle?: string
   hookScore?: number // 0-100, quality of the opening hook (added post-transcription)
@@ -36,6 +38,7 @@ export interface FusionConfig {
     audio: number
     clips: number // viewer-created clips
     visual: number // visual scene analysis
+    transcript: number // LLM-analyzed transcript
   }
   // Timing
   preRoll: number // seconds before peak
@@ -50,16 +53,17 @@ export interface FusionConfig {
 
 const DEFAULT_CONFIG: FusionConfig = {
   weights: {
-    chat: 0.3,
-    audio: 0.3,
-    clips: 0.2,
-    visual: 0.2,
+    chat: 0.25,
+    audio: 0.25,
+    transcript: 0.25,
+    visual: 0.15,
+    clips: 0.1,
   },
   preRoll: 5,
   postRoll: 8,
   minDuration: 10,
   maxDuration: 60,
-  minScore: 30,
+  minScore: 20, // Lowered to accommodate single-signal moments (e.g., transcript-only with 85 * 0.3 = 25.5)
   convergenceBonus: 20,
   convergenceWindow: 5,
 }
@@ -79,10 +83,11 @@ export function fuseSignals(
   audioMoments: AudioMoment[],
   viewerClips: ViewerClip[] = [],
   visualMoments: VisualMoment[] = [],
+  transcriptMoments: TranscriptMoment[] = [],
   config: Partial<FusionConfig> = {}
 ): SignalMoment[] {
   const cfg = { ...DEFAULT_CONFIG, ...config }
-  
+
   // Collect all timestamps
   const allTimestamps = new Set<number>()
 
@@ -90,9 +95,10 @@ export function fuseSignals(
   audioMoments.forEach(m => allTimestamps.add(Math.round(m.timestamp)))
   viewerClips.forEach(c => allTimestamps.add(Math.round(c.timestamp)))
   visualMoments.forEach(m => allTimestamps.add(Math.round(m.timestamp)))
-  
+  transcriptMoments.forEach(m => allTimestamps.add(Math.round(m.timestamp)))
+
   const candidates: SignalMoment[] = []
-  
+
   // For each timestamp, calculate combined score
   for (const timestamp of allTimestamps) {
     const signals: SignalMoment['signals'] = {}
@@ -157,14 +163,28 @@ export function fuseSignals(
       totalScore += visualMoment.hydeScore * cfg.weights.visual
       signalCount++
     }
-    
+
+    // Find nearby transcript moment
+    const transcriptMoment = transcriptMoments.find(
+      m => Math.abs(m.timestamp - timestamp) <= cfg.convergenceWindow
+    )
+    if (transcriptMoment) {
+      signals.transcript = {
+        score: transcriptMoment.hydeScore,
+        type: transcriptMoment.type,
+        excerpt: transcriptMoment.excerpt,
+      }
+      totalScore += transcriptMoment.hydeScore * cfg.weights.transcript
+      signalCount++
+    }
+
     // Apply convergence bonus
     if (signalCount >= 2) {
       totalScore += cfg.convergenceBonus * (signalCount - 1)
     }
-    
-    // Calculate confidence
-    const confidence = signalCount / 4 // max 4 signal types
+
+    // Calculate confidence (max 5 signal types: chat, audio, clips, visual, transcript)
+    const confidence = signalCount / 5
     
     // Skip if below threshold
     if (totalScore < cfg.minScore) continue
@@ -180,8 +200,15 @@ export function fuseSignals(
     if (signals.visual?.type === 'victory' || signals.visual?.type === 'action') {
       duration += 2 // slightly longer for visual events
     }
+    if (signals.transcript) {
+      // Use transcript moment's suggested duration if available
+      const transcriptDuration = transcriptMoment?.duration || 0
+      if (transcriptDuration > duration) {
+        duration = transcriptDuration
+      }
+    }
     duration = Math.max(cfg.minDuration, Math.min(duration, cfg.maxDuration))
-    
+
     // Generate suggested title
     const suggestedTitle = generateTitle(signals, nearbyClips)
     
@@ -238,34 +265,52 @@ function generateTitle(
   signals: SignalMoment['signals'],
   viewerClips: ViewerClip[]
 ): string {
+  // If transcript has a good excerpt, prioritize that
+  if (signals.transcript?.excerpt && signals.transcript.excerpt.length > 10) {
+    // Use first part of excerpt as title (up to 50 chars)
+    const excerpt = signals.transcript.excerpt.trim()
+    if (excerpt.length <= 50) {
+      return excerpt
+    }
+    return excerpt.substring(0, 47) + '...'
+  }
+
   // If viewers already clipped this, use their titles as inspiration
   if (viewerClips.length > 0) {
     // Find most viewed clip's title
-    const bestClip = viewerClips.reduce((best, clip) => 
+    const bestClip = viewerClips.reduce((best, clip) =>
       clip.viewCount > best.viewCount ? clip : best
     )
     if (bestClip.title && bestClip.title.length > 3) {
       return bestClip.title
     }
   }
-  
+
   // Generate based on signals
   const parts: string[] = []
-  
+
+  if (signals.transcript?.type === 'funny') {
+    parts.push('Hilarious moment')
+  } else if (signals.transcript?.type === 'intense') {
+    parts.push('Intense moment')
+  } else if (signals.transcript?.type === 'quotable') {
+    parts.push('Quotable moment')
+  }
+
   if (signals.audio?.type === 'silence_break') {
     parts.push('The moment everyone waited for')
   } else if (signals.audio?.score && signals.audio.score > 80) {
     parts.push('Insane reaction')
   }
-  
+
   if (signals.chat?.velocity && signals.chat.velocity > 8) {
     parts.push('Chat went crazy')
   }
-  
+
   if (signals.clips?.count && signals.clips.count > 3) {
     parts.push('The clip everyone made')
   }
-  
+
   return parts.length > 0 ? parts[0] : 'Highlight moment'
 }
 

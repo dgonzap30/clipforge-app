@@ -387,3 +387,46 @@ To use this feature in production:
 - Default behavior unchanged when flag is not set
 - No new linting errors introduced
 - Implementation follows PRD requirements exactly
+
+---
+
+## Task: Add transcript-aware scoring with LLM analysis
+
+### Changes Made:
+- Created new transcript analysis module (server/src/analysis/transcript.ts) with LLM-powered scoring
+- Implemented TranscriptMoment interface to track clip-worthy moments from speech analysis
+- Added analyzeTranscript() function that uses OpenAI GPT-4 to identify funny, intense, quotable, emotional, and narrative moments
+- Updated signal fusion module to support transcript signals as a fourth signal type
+- Modified FusionConfig to include transcript weight (default: 0.3, balanced with chat and audio at 0.3 each)
+- Enhanced title generation to prioritize transcript excerpts when available
+- Lowered minScore threshold from 30 to 20 to accommodate weighted single-signal moments
+- Created comprehensive test suites for both transcript analysis and fusion with transcript support
+
+### Files Created:
+- server/src/analysis/transcript.ts - Core transcript analysis module with LLM integration
+- server/src/analysis/transcript.test.ts - 17 tests covering all transcript analysis functionality
+- server/src/analysis/fusion.test.ts - 15 tests covering signal fusion with transcript support
+
+### Files Modified:
+- server/src/analysis/fusion.ts - Added transcript signal support and updated fusion logic
+- package.json - Added vitest, @vitest/ui, jsdom, @testing-library/jest-dom, and @testing-library/react as dev dependencies
+
+### Implementation Details:
+- Transcript analysis uses sliding windows (30s default) with overlapping context
+- LLM analyzes chunks and scores moments 0-100 based on clip-worthiness
+- Five moment types identified: funny, intense, quotable, emotional, narrative
+- Confidence scoring (0-1) indicates LLM certainty about each moment
+- Deduplication logic merges overlapping moments, keeping higher-scored ones
+- Fusion convergence bonus applied when transcript aligns with chat/audio/clips
+- All TypeScript linting rules satisfied with proper type safety
+
+### Test Coverage:
+- Transcript analysis: 17 tests covering API integration, JSON parsing, error handling, and moment types
+- Fusion with transcripts: 15 tests covering signal combination, weighting, title generation, and edge cases
+- All 32 tests passing successfully
+
+### Notes:
+- Uses OpenAI GPT-4 Turbo for fast, cost-effective analysis
+- Designed to integrate seamlessly with existing chat and audio analysis
+- Transcript signals enhance clip detection accuracy through multi-modal fusion
+- Ready for integration into the pipeline stages for end-to-end clip generation
