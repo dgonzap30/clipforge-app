@@ -28,6 +28,15 @@ export const env = {
   // Anthropic (for Claude Vision API)
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
 
+  // Anthropic Claude (for LLM transcript analysis)
+  CLAUDE_API_KEY: process.env.CLAUDE_API_KEY || '',
+
+  // Pexels (for B-roll stock footage)
+  PEXELS_API_KEY: process.env.PEXELS_API_KEY || '',
+
+  // LLM Provider for transcript analysis
+  LLM_PROVIDER: (process.env.LLM_PROVIDER || 'openai') as 'openai' | 'claude',
+
   // Redis (for job queue)
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
 

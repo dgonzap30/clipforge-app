@@ -532,3 +532,143 @@ To use this feature in production:
 - Existing smoothKeyframes() and buildCropFilter() functions handle interpolation between keyframes
 - Integration is fully backward compatible - if face detection fails, system falls back to center crop
 - Multi-face handling allows prioritization based on audio correlation for speaker detection
+
+---
+
+## Task: Add B-roll insertion using LLM transcript analysis
+
+### Overview:
+Implemented a complete B-roll insertion system that uses LLM (OpenAI/Claude) to analyze video transcripts and automatically insert relevant stock footage from Pexels at appropriate moments. This enhances videos with supplemental visual content that supports what's being discussed.
+
+### Changes Made:
+
+#### 1. LLM Integration (`server/src/lib/llm.ts`)
+- Created LLM client supporting both OpenAI and Anthropic Claude
+- Analyzes video transcripts to identify B-roll insertion opportunities
+- Generates structured suggestions with timestamps, durations, search queries, and context
+- Validates and normalizes LLM responses to ensure consistent output
+- Clamps B-roll durations between 3-10 seconds for optimal viewing
+
+#### 2. Pexels API Integration (`server/src/lib/pexels.ts`)
+- Implemented Pexels API client for searching and downloading stock footage
+- Supports filtering by orientation (landscape/portrait/square) and quality
+- Smart video file selection based on preferred dimensions
+- Handles video downloads and saves them to local filesystem
+- Filters for MP4 format and applies minimum duration requirements
+
+#### 3. B-roll Pipeline Stage (`server/src/pipeline/stages/broll.ts`)
+- New pipeline stage that runs after caption stage
+- Loads transcription from JSON file saved by caption stage
+- Analyzes transcript using configured LLM provider
+- Downloads B-roll videos based on LLM suggestions
+- Uses FFmpeg overlay filter to composite B-roll over main video
+- Reduces main video opacity to 40% during B-roll segments
+- Scales B-roll footage to match main video dimensions
+- Supports configurable max B-roll insertions (default: 5)
+- Gracefully handles failures and returns original video if B-roll fails
+
+#### 4. Pipeline Integration (`server/src/pipeline/orchestrator.ts`)
+- Added B-roll stage to pipeline after caption stage
+- Modified caption stage to always save transcription JSON for B-roll analysis
+- Store transcription paths in pipeline context metadata
+- B-roll stage reads settings from job configuration:
+  - `bRoll`: boolean flag to enable/disable B-roll
+  - `maxBRolls`: maximum number of B-roll insertions per video
+  - `outputFormat`: determines orientation for stock footage search
+- Falls back to captioned clips if B-roll is disabled or fails
+- Stores B-roll clips in context metadata for upload stage
+
+#### 5. Upload Stage Update (`server/src/pipeline/stages/upload.ts`)
+- Modified to prioritize B-roll clips over captioned clips
+- Upload order: brollClips → captionedClips → reframedClips → extractedClips
+- Ensures final videos with B-roll insertions are uploaded to storage
+
+#### 6. Environment Variables (`server/src/lib/env.ts`)
+- Added `CLAUDE_API_KEY` for Anthropic Claude API access
+- Added `PEXELS_API_KEY` for Pexels stock footage API
+- Added `LLM_PROVIDER` to configure LLM choice ('openai' or 'claude')
+- Defaults to 'openai' provider for backward compatibility
+
+#### 7. Comprehensive Tests
+- `server/src/lib/llm.test.ts`: Tests for LLM transcript analysis
+  - Validates suggestion structure and required fields
+  - Tests duration clamping (3-10 seconds)
+  - Handles empty transcriptions
+  - Supports both OpenAI and Claude providers
+  - Error handling for unsupported providers
+- `server/src/lib/pexels.test.ts`: Tests for Pexels API client
+  - Best video file selection logic
+  - MP4 format filtering
+  - Dimension matching
+  - Search configuration
+  - Duration filtering
+- `server/src/pipeline/stages/broll.test.ts`: Tests for B-roll pipeline stage
+  - Skip behavior when disabled
+  - Empty insertions when no suggestions found
+  - Configuration validation (maxBRolls, opacity, orientation)
+
+### Files Created:
+- `server/src/lib/llm.ts` (275 lines)
+- `server/src/lib/llm.test.ts` (138 lines)
+- `server/src/lib/pexels.ts` (165 lines)
+- `server/src/lib/pexels.test.ts` (108 lines)
+- `server/src/pipeline/stages/broll.ts` (260 lines)
+- `server/src/pipeline/stages/broll.test.ts` (145 lines)
+
+### Files Modified:
+- `server/src/lib/env.ts`: Added CLAUDE_API_KEY, PEXELS_API_KEY, LLM_PROVIDER
+- `server/src/pipeline/orchestrator.ts`: Integrated B-roll stage, updated caption stage to save transcriptions
+- `server/src/pipeline/stages/upload.ts`: Prioritize B-roll clips for upload
+
+### Technical Details:
+
+#### LLM Prompt Strategy:
+The system sends the full transcript with timestamps to the LLM and asks it to identify moments where B-roll would enhance the video. The LLM returns JSON with:
+- Timestamp (seconds from start)
+- Duration (suggested length of B-roll)
+- Search query (for Pexels API)
+- Context (explanation of why this B-roll makes sense)
+
+#### FFmpeg B-roll Overlay:
+Uses complex filter graph to overlay multiple B-roll segments:
+1. Creates base layer with reduced opacity (40%)
+2. Scales each B-roll to match video dimensions
+3. Uses `enable` expression to show B-roll only during specified time ranges
+4. Overlays B-roll on base layer with temporal control
+5. Copies audio from main video (no B-roll audio)
+
+#### Configuration Requirements:
+To use B-roll insertion, jobs need:
+```typescript
+{
+  settings: {
+    bRoll: true,
+    maxBRolls: 3,  // optional, default 5
+    outputFormat: 'vertical'  // determines B-roll orientation
+  }
+}
+```
+
+Environment variables needed:
+- `OPENAI_API_KEY` or `CLAUDE_API_KEY` (depending on LLM_PROVIDER)
+- `PEXELS_API_KEY`
+- `LLM_PROVIDER` (optional, defaults to 'openai')
+
+### Testing Results:
+- All B-roll tests passed
+- Tests validate configuration, structure, and error handling
+- Tests use mock data and expect API call failures without real keys
+- Lint checks passed for all new files (0 errors, 0 warnings)
+
+### Integration Points:
+- Caption stage now saves transcription JSON by default
+- B-roll stage is optional and controlled by job settings
+- Falls back gracefully if API keys are missing or calls fail
+- Upload stage automatically uses B-roll clips when available
+
+### Future Enhancements:
+- Add B-roll audio mixing options
+- Support custom opacity configurations per job
+- Add B-roll preview generation
+- Cache LLM analyses for reprocessing
+- Add analytics for B-roll engagement metrics
