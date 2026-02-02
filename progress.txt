@@ -238,3 +238,63 @@ To use this feature in production:
 - Single clips bypass the compilation step for efficiency
 - The system gracefully handles missing transition configurations
 - All code follows existing patterns and coding standards
+
+---
+
+## Task: Build platform connection UI in Settings page
+
+### Changes Made:
+- Created new PlatformConnection component (src/components/settings/PlatformConnection.tsx)
+  - Reusable component for managing platform OAuth connections
+  - Supports Twitch (via Supabase OAuth), YouTube (via Google OAuth), and TikTok
+  - Shows connection status with visual indicators (checkmark icon when connected)
+  - Handles connect/disconnect flows with proper error handling
+  - Displays loading states during OAuth operations
+
+- Updated Settings page (src/pages/Settings.tsx)
+  - Replaced placeholder platform cards with PlatformConnection components
+  - Added descriptive text for Connected Accounts section
+  - Integrated with Zustand store for connection status tracking
+
+- Enhanced AuthCallback page (src/pages/AuthCallback.tsx)
+  - Added platform parameter handling from OAuth redirect URL
+  - Updates store with correct connection status based on platform
+  - Redirects to Settings page after non-Twitch platform connections
+  - Fixed React hook linting warning
+
+- Wrote comprehensive tests (src/components/settings/PlatformConnection.test.tsx)
+  - 9 test cases covering rendering, platform support, and component structure
+  - Tests verify button states, accessibility, and platform-specific behavior
+  - All tests passing with happy-dom test environment
+
+### Files Modified:
+- src/components/settings/PlatformConnection.tsx (new file)
+- src/components/settings/PlatformConnection.test.tsx (new file)
+- src/pages/Settings.tsx
+- src/pages/AuthCallback.tsx
+- vitest.config.ts (changed from jsdom to happy-dom)
+
+### Technical Details:
+- OAuth Providers:
+  - Twitch: uses 'twitch' provider via Supabase Auth
+  - YouTube: uses 'google' provider with YouTube upload scope
+  - TikTok: placeholder (no provider configured yet)
+
+- Connection Status Tracking:
+  - Stored in Zustand store (user.twitchConnected, user.tiktokConnected, user.youtubeConnected)
+  - Persisted to localStorage via Zustand persist middleware
+
+- Disconnect Behavior:
+  - Twitch: full sign out from Supabase (clears all connections)
+  - Other platforms: updates connection status in store only
+
+### Testing:
+- All 9 tests pass successfully
+- Linting passes with no errors
+- Test dependencies installed: vitest, @testing-library/react, @testing-library/jest-dom, @testing-library/user-event, jsdom, happy-dom
+
+### Notes:
+- TikTok OAuth integration is not yet configured (button is disabled)
+- YouTube OAuth requires backend configuration in Supabase
+- Future enhancements could include displaying connected account details (username, avatar)
+- OAuth callback URLs must be configured in Supabase dashboard
