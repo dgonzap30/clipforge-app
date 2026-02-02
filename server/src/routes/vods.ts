@@ -1,23 +1,47 @@
 import { Hono } from 'hono'
-import { getCookie } from 'hono/cookie'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { TwitchClient, parseTwitchDuration } from '../lib/twitch'
+import { verifySupabaseToken } from '../lib/supabase'
 
 export const vodsRoutes = new Hono()
 
-// Middleware to require auth
+// Middleware to require auth using Supabase JWT Bearer token
 const requireAuth = async (c: any, next: any) => {
-  const accessToken = getCookie(c, 'twitch_access_token')
-  
-  if (!accessToken) {
-    return c.json({ error: 'Unauthorized' }, 401)
+  const authHeader = c.req.header('Authorization')
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Unauthorized - Missing or invalid Authorization header' }, 401)
   }
-  
-  c.set('accessToken', accessToken)
-  c.set('twitchClient', new TwitchClient(accessToken))
-  
-  await next()
+
+  const token = authHeader.substring(7) // Remove 'Bearer ' prefix
+
+  try {
+    const { user, error } = await verifySupabaseToken(token)
+
+    if (error || !user) {
+      return c.json({ error: 'Unauthorized - Invalid token' }, 401)
+    }
+
+    // Store user in context
+    c.set('user', user)
+
+    // Get Twitch access token from user metadata
+    // Assuming Supabase Auth with Twitch OAuth stores the provider token in user_metadata
+    const twitchAccessToken = user.user_metadata?.provider_token || user.user_metadata?.twitch_access_token
+
+    if (!twitchAccessToken) {
+      return c.json({ error: 'Twitch authentication required' }, 401)
+    }
+
+    c.set('accessToken', twitchAccessToken)
+    c.set('twitchClient', new TwitchClient(twitchAccessToken))
+
+    await next()
+  } catch (err) {
+    console.error('Auth middleware error:', err)
+    return c.json({ error: 'Authentication failed' }, 401)
+  }
 }
 
 // Get VODs for the authenticated user
