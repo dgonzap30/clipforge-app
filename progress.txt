@@ -1,16 +1,129 @@
-## Task: Update server/src/lib/env.ts
+## Task: Add hook detection and clip boundary optimization
+
+### Implementation Summary:
+Implemented a comprehensive hook detection and clip boundary optimization system to improve clip quality and viewer retention by ensuring clips start with strong hooks and end on complete thoughts.
 
 ### Changes Made:
-- Replaced S3-related environment variables with Supabase and OpenAI variables
-- Removed: S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION
-- Added: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, OPENAI_API_KEY
-- Maintained the same structure and format of the env configuration
-- The validateEnv() function remains unchanged (validation requirements will need to be updated in a separate task if needed)
+
+#### 1. Created Hook Detection Module (server/src/analysis/hooks.ts)
+- **Hook Analysis Function (`analyzeHook`)**: Analyzes the first 3 seconds of clips to detect hook quality
+  - Detects 4 types of strong hooks:
+    - **Question hooks**: Starts with "What", "How", "Why", etc. (base score: 85)
+    - **Reaction hooks**: Starts with "Oh my god", "No way", "Wait", etc. (base score: 90)
+    - **Action hooks**: Starts with "Watch", "Check this", "Look", etc. (base score: 80)
+    - **Statement hooks**: Declarative sentence with capitalization (base score: 70)
+  - Applies penalties for weak starts:
+    - Mid-sentence starts: -30% penalty
+    - Silent starts (>0.5s delay): -40% penalty
+    - Filler word starts (um, uh, like): -20% penalty
+  - Bonus for high word density (confident delivery): +10%
+
+#### 2. Clip Boundary Optimization Function (`optimizeClipBoundaries`)
+- **Start Boundary Optimization**: Aligns clip start to sentence boundaries
+  - Searches backward up to 2 seconds to find sentence start
+  - Avoids starting with filler words
+  - Ensures clip captures full context
+- **End Boundary Optimization**: Ensures clips end on complete thoughts
+  - Aligns to sentence boundaries
+  - Adds 0.5s breathing room after last word
+  - Prevents mid-sentence cuts
+- **Duration Enforcement**: Ensures clips meet minimum 8-second duration
+
+#### 3. Hook Scoring Integration
+- **`applyHookScore` function**: Applies hook score to base clip score
+  - Default weight: 20% (configurable)
+  - Boosts clips with strong hooks
+  - Formula: baseScore + (hookScore * hookWeight)
+- **`filterWeakHooks` function**: Filters out clips with poor hooks
+  - Default threshold: hookScore < 30 are filtered
+  - Configurable threshold for different quality standards
+
+#### 4. Updated Fusion Types (server/src/analysis/fusion.ts)
+- Extended `SignalMoment` interface to include:
+  - `hookScore?: number` - Hook quality score (0-100)
+  - `boundaryOptimization?` - Adjusted clip boundaries with reasoning
+
+### Test Coverage:
+
+#### Created Comprehensive Test Suite (server/src/analysis/__tests__/hooks.test.ts)
+24 tests covering all functionality:
+
+**Hook Detection Tests (12 tests):**
+- Question hook detection
+- Reaction hook detection
+- Action hook detection
+- Statement hook detection
+- Mid-sentence start penalties
+- Silent start penalties
+- Filler word start penalties
+- Empty transcript handling
+- High word density bonus
+
+**Boundary Optimization Tests (7 tests):**
+- Start alignment to sentence boundaries
+- End alignment to sentence boundaries
+- Breathing room after last word
+- Avoiding filler word starts
+- Minimum duration enforcement
+- Empty transcript graceful handling
+- Max adjustment limit respect
+
+**Scoring Tests (5 tests):**
+- Hook score boosting base score
+- Score bounds enforcement
+- Custom hook weight application
+- Weak hook filtering
+- Custom threshold filtering
+
+**Test Results**: All 24 tests passing ✓
+
+### Integration Points:
+
+The hook detection system is designed to integrate into the pipeline at these points:
+
+1. **During Caption Stage**: After transcription is complete, run `analyzeHook()` on each clip
+2. **In Fusion Stage**: Apply hook scores to moments using `applyHookScore()`
+3. **Before Extraction**: Optimize boundaries with `optimizeClipBoundaries()`
+4. **Final Filtering**: Remove weak hooks with `filterWeakHooks()`
+
+### Configuration Options:
+
+The system provides several configurable parameters:
+- `hookWeight`: Impact of hook score on final score (default: 0.2)
+- `minHookScore`: Threshold for filtering weak hooks (default: 30)
+- `maxAdjustment`: Maximum seconds to adjust boundaries (default: 2)
+- `hookWindow`: Seconds analyzed for hook detection (default: 3)
+
+### Files Created:
+- server/src/analysis/hooks.ts (298 lines)
+- server/src/analysis/__tests__/hooks.test.ts (396 lines)
 
 ### Files Modified:
-- server/src/lib/env.ts
+- server/src/analysis/fusion.ts (added hookScore and boundaryOptimization to SignalMoment)
+
+### Benefits:
+
+1. **Improved Viewer Retention**: Clips start with engaging hooks that capture attention
+2. **Better Clip Quality**: Aligned boundaries ensure complete thoughts and natural pacing
+3. **Reduced Weak Clips**: Automatic filtering removes clips with poor openings
+4. **Data-Driven Optimization**: Uses transcript analysis for intelligent boundary detection
+5. **Flexible Configuration**: Adjustable thresholds and weights for different use cases
+
+### Next Steps (for future integration):
+
+To fully integrate this feature into the pipeline:
+1. Wire hook analysis into caption stage after transcription
+2. Update analyze stage to apply hook scores to moments
+3. Add hook filtering before clip extraction
+4. Expose configuration options in job settings
+5. Add UI controls for hook sensitivity settings
 
 ### Notes:
+- All code passes ESLint with zero warnings or errors
+- Comprehensive test coverage ensures reliability
+- Designed to be backward compatible (optional hookScore field)
+- Gracefully handles missing transcript data
+- Performance optimized to analyze only first 3 seconds of clips
 - The env object now exports Supabase credentials instead of S3-compatible storage credentials
 - OpenAI API key has been added for AI functionality
 - Default values remain empty strings to maintain consistency with other configuration
