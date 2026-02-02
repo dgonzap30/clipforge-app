@@ -75,7 +75,7 @@ export const reframeStage: PipelineStage = {
     if (useSplitScreen) {
       console.log(`[Reframe] Split-screen mode enabled for gaming content (${targetAspect})`)
     } else {
-      console.log(`[Reframe] Processing ${videoFiles.length} clips with center crop (${targetAspect})`)
+      console.log(`[Reframe] Processing ${videoFiles.length} clips with smart reframing (${targetAspect})`)
     }
 
     // Process each clip
@@ -92,7 +92,6 @@ export const reframeStage: PipelineStage = {
           // Split-screen layout for gaming content
           // NOTE: This requires dual video sources (facecam + gameplay)
           // Check if we have metadata pointing to separate sources in context
-
           const facecamPath = context.metadata?.facecamPath
           const gameplayPath = context.metadata?.gameplayPath
 
@@ -112,7 +111,7 @@ export const reframeStage: PipelineStage = {
               keyframes: 0,
             })
           } else {
-            // No dual sources available - fall back to standard reframe
+            // No dual sources available - fall back to standard reframe with face tracking
             // This is expected for MVP since we don't have separate stream extraction yet
             console.log(`[Reframe] Split-screen enabled but dual sources not available, using standard reframe`)
 
@@ -120,24 +119,24 @@ export const reframeStage: PipelineStage = {
               inputPath,
               outputPath,
               targetAspect,
-              faceTracking: false,
+              faceTracking: true, // Enable MediaPipe face detection
               smoothing: 0.7,
             })
 
             results.push({
               file,
               outputPath: result.outputPath,
-              method: 'center_crop',
+              method: result.method,
               keyframes: result.keyframes.length,
             })
           }
         } else {
-          // Use center crop for MVP (faceTracking disabled)
+          // Use face tracking for smart reframing
           const result = await reframeVideo({
             inputPath,
             outputPath,
             targetAspect,
-            faceTracking: false, // MVP: disabled for simplicity and performance
+            faceTracking: true, // Enable MediaPipe face detection
             smoothing: 0.7,
           })
 

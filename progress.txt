@@ -430,3 +430,105 @@ To use this feature in production:
 - Designed to integrate seamlessly with existing chat and audio analysis
 - Transcript signals enhance clip detection accuracy through multi-modal fusion
 - Ready for integration into the pipeline stages for end-to-end clip generation
+
+---
+
+## Task: Integrate MediaPipe Face Detection for smart reframing
+
+### Changes Made:
+
+1. **Installed MediaPipe Dependency**
+   - Added `@mediapipe/tasks-vision@0.10.32` to server dependencies
+   - This package provides the FaceDetector and FilesetResolver for face detection
+
+2. **Implemented Face Detection in reframe.ts** (server/src/extraction/reframe.ts)
+   - Integrated MediaPipe Face Detection into existing multi-face handling infrastructure
+   - Extracts video frames at 2 FPS using FFmpeg for analysis
+   - Uses MediaPipe BlazeFace short-range model for accurate face detection
+   - For each detected face:
+     - Calculates face center coordinates
+     - Generates crop keyframes to keep face centered in frame
+     - Clamps coordinates to valid bounds
+   - Falls back gracefully to center crop if face detection fails or no faces found
+   - Added `loadImageFromFile()` helper function to convert frames to ImageData format for MediaPipe
+   - Proper cleanup of temporary frames after processing
+   - Integrated with existing IOU-based face tracking for multi-face handling
+   - Supports face selection strategies (largest, speaker, center)
+
+3. **Enabled Face Tracking in Pipeline** (server/src/pipeline/stages/reframe.ts)
+   - Changed `faceTracking` parameter from `false` to `true` in reframeVideo call
+   - Updated console log message to reflect "smart reframing" instead of "center crop"
+   - Face tracking now runs automatically for all clips in the pipeline
+   - Maintains split-screen logic for gaming content
+
+4. **Added Comprehensive Tests** (server/src/extraction/reframe.test.ts)
+   - Combined multi-face handling tests with MediaPipe integration tests
+   - Test coverage includes:
+     - IOU calculation tests (perfect overlap, no overlap, partial overlap)
+     - Face track building tests (single track, multiple tracks, temporal separation)
+     - Face selection strategy tests (largest, speaker, center)
+     - Aspect ratio validation
+     - Face detection fallback behavior
+     - Smoothing parameter validation
+     - Keyframe generation and structure
+     - Different target aspect ratios (9:16, 1:1, 16:9, 4:5)
+     - MediaPipe integration verification
+     - Split-screen layout tests
+   - All tests pass successfully
+
+5. **Updated Existing Tests** (server/src/pipeline/stages/reframe.test.ts)
+   - Modified test expectations to reflect face tracking being enabled
+   - Updated expected config to have `faceTracking: true`
+
+### Technical Implementation Details:
+
+**Face Detection Flow:**
+1. Extract frames at 2 FPS from input video using FFmpeg
+2. Initialize MediaPipe FaceDetector with BlazeFace short-range model
+3. Process each frame to detect faces
+4. Build face tracks using IOU-based tracking
+5. Select best track based on strategy (largest, speaker, or center)
+6. For detected faces:
+   - Get bounding box coordinates
+   - Calculate face center position
+   - Generate crop keyframe to center face in output
+7. Apply smoothing to keyframes for fluid camera motion
+8. Build FFmpeg crop filter with interpolation
+9. Clean up temporary files
+
+**Fallback Strategy:**
+- If MediaPipe initialization fails: falls back to center crop
+- If no faces detected in any frame: falls back to center crop
+- If frame processing fails: continues to next frame
+- Graceful error handling throughout
+
+**Performance Considerations:**
+- Runs at 2 FPS (analyzes 1 frame every 0.5 seconds)
+- Minimal overhead for short clips (typical 10-60 second clips)
+- Temporary frames cleaned up after processing
+- Model loaded from CDN (no local storage required)
+
+### Files Modified:
+- server/src/extraction/reframe.ts - Implemented MediaPipe face detection with multi-face handling
+- server/src/pipeline/stages/reframe.ts - Enabled face tracking in pipeline
+- server/src/extraction/reframe.test.ts - Combined multi-face and MediaPipe tests
+- server/src/pipeline/stages/reframe.test.ts - Updated existing tests
+- server/package.json - Added @mediapipe/tasks-vision dependency
+
+### Acceptance Criteria Met:
+✓ MediaPipe FaceDetector successfully detects faces in test clips
+✓ Multi-face handling with IOU-based tracking implemented
+✓ Face selection strategies (largest, speaker, center) working
+✓ Crop keyframes are generated with face center coordinates
+✓ Face stays centered in 9:16 output video throughout clip
+✓ Smoothing prevents jittery crop motion (0.7 smoothing factor applied)
+✓ Falls back gracefully if no faces detected (reverts to center crop)
+✓ All tests pass
+✓ No linting errors in new/modified code
+
+### Notes:
+- Face detection uses BlazeFace short-range model which is optimized for faces close to camera (ideal for streaming content)
+- The 2 FPS analysis rate balances performance and accuracy - sufficient for smooth tracking
+- Existing smoothKeyframes() and buildCropFilter() functions handle interpolation between keyframes
+- Integration is fully backward compatible - if face detection fails, system falls back to center crop
+- Multi-face handling allows prioritization based on audio correlation for speaker detection

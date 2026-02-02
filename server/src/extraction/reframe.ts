@@ -1,12 +1,17 @@
 /**
  * Vertical Reframing Module
- * 
+ *
  * Converts horizontal (16:9) clips to vertical (9:16) format
  * using intelligent cropping based on face detection and motion.
  */
 
 import { $ } from 'bun'
 import type { AudioMoment } from '../analysis/audio'
+import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision'
+import { mkdir, unlink } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 export type AspectRatio = '9:16' | '1:1' | '16:9' | '4:5'
 export type FaceSelectionStrategy = 'largest' | 'speaker' | 'center'
@@ -166,8 +171,7 @@ export async function reframeVideo(config: ReframeConfig): Promise<ReframeResult
 /**
  * Detect faces and generate keyframes for cropping
  *
- * Uses FFmpeg's facedetect filter or external face detection.
- * For production, consider using MediaPipe or similar for better accuracy.
+ * Uses MediaPipe Face Detection for accurate face tracking with multi-face handling
  */
 async function detectFacesForReframe(
   inputPath: string,
@@ -178,40 +182,122 @@ async function detectFacesForReframe(
   strategy: FaceSelectionStrategy = 'largest',
   audioMoments: AudioMoment[] = []
 ): Promise<CropKeyframe[]> {
-  // Use FFmpeg's metadata extraction for face detection
-  // This is a simplified approach - for production, use MediaPipe
+  // Create temporary directory for frames
+  const tmpDir = join(tmpdir(), `reframe-${Date.now()}`)
+  await mkdir(tmpDir, { recursive: true })
 
-  // For now, we skip the FFmpeg call and return empty
-  // TODO: Implement proper face detection parsing with MediaPipe
-  // const result = await $`ffmpeg -i ${inputPath} \
-  //   -vf "select='eq(pict_type,I)',metadata=print:file=-" \
-  //   -vsync vfr -f null - 2>&1`.text()
+  try {
+    // Extract frames at 2 FPS using FFmpeg
+    await $`ffmpeg -i ${inputPath} -vf "fps=2" ${tmpDir}/frame-%04d.jpg -y`
 
-  // Parse face positions from output
-  // Simulate detected faces for implementation
-  // In production, this would parse actual face detection data
-  const detectedFaces: DetectedFace[] = []
+    // Initialize MediaPipe Face Detector
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm'
+    )
 
-  if (detectedFaces.length === 0) {
+    const detector = await FaceDetector.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+      },
+      runningMode: 'IMAGE',
+    })
+
+    // Read all extracted frames
+    const frameFiles = (await readdir(tmpDir))
+      .filter((f) => f.endsWith('.jpg'))
+      .sort()
+
+    const detectedFaces: DetectedFace[] = []
+
+    // Process each frame
+    for (let i = 0; i < frameFiles.length; i++) {
+      const framePath = join(tmpDir, frameFiles[i])
+      const timestamp = i / 2 // 2 FPS means each frame is 0.5 seconds apart
+
+      try {
+        // Read frame as ImageData for MediaPipe
+        const image = await loadImageFromFile(framePath)
+        const detections = detector.detect(image)
+
+        // Store all detected faces with timestamps
+        for (const detection of detections.detections) {
+          const bbox = detection.boundingBox
+          if (bbox) {
+            detectedFaces.push({
+              timestamp,
+              x: bbox.originX * sourceWidth,
+              y: bbox.originY * sourceHeight,
+              width: bbox.width * sourceWidth,
+              height: bbox.height * sourceHeight,
+              confidence: detection.categories?.[0]?.score || 0.5,
+            })
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to process frame ${frameFiles[i]}:`, err)
+        // Continue to next frame
+      }
+
+      // Clean up frame file
+      await unlink(framePath).catch(() => {})
+    }
+
+    detector.close()
+
+    if (detectedFaces.length === 0) {
+      return []
+    }
+
+    // Apply multi-face handling and speaker prioritization
+    const tracks = buildFaceTracks(detectedFaces)
+    const selectedTrack = selectBestTrack(tracks, strategy, audioMoments)
+
+    if (!selectedTrack) {
+      return []
+    }
+
+    // Convert selected track to crop keyframes
+    return convertFaceTrackToKeyframes(
+      selectedTrack,
+      cropWidth,
+      cropHeight,
+      sourceWidth,
+      sourceHeight
+    )
+  } catch (err) {
+    console.error('Face detection failed:', err)
     return []
+  } finally {
+    // Clean up temporary directory
+    try {
+      await $`rm -rf ${tmpDir}`
+    } catch {
+      // Ignore cleanup errors
+    }
   }
+}
 
-  // Apply multi-face handling and speaker prioritization
-  const tracks = buildFaceTracks(detectedFaces)
-  const selectedTrack = selectBestTrack(tracks, strategy, audioMoments)
+/**
+ * Load image from file for MediaPipe processing
+ */
+async function loadImageFromFile(framePath: string): Promise<ImageData> {
+  // Use FFmpeg to get raw RGBA data
+  const result = await $`ffprobe -v error -select_streams v:0 \
+    -show_entries stream=width,height \
+    -of csv=s=x:p=0 ${framePath}`.text()
 
-  if (!selectedTrack) {
-    return []
+  const [width, height] = result.trim().split('x').map(Number)
+
+  // Extract raw RGBA pixel data
+  const rawData = await $`ffmpeg -i ${framePath} -f rawvideo -pix_fmt rgba -`.arrayBuffer()
+
+  // Create ImageData
+  return {
+    width,
+    height,
+    data: new Uint8ClampedArray(rawData),
+    colorSpace: 'srgb',
   }
-
-  // Convert selected track to crop keyframes
-  return convertFaceTrackToKeyframes(
-    selectedTrack,
-    cropWidth,
-    cropHeight,
-    sourceWidth,
-    sourceHeight
-  )
 }
 
 /**
@@ -456,7 +542,6 @@ function convertFaceTrackToKeyframes(
   }
 
   return keyframes
-}
 
 /**
  * Smooth keyframes to avoid jerky motion

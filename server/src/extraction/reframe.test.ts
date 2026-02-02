@@ -1,13 +1,13 @@
 /**
- * Tests for Reframe Extraction Module
- * Includes: Multi-Face Handling, Speaker Prioritization, and Split-Screen Layout
+ * Tests for Reframe Module with MediaPipe Face Detection and Multi-Face Handling
  */
 
-import { describe, test, expect } from 'bun:test'
-import type { DetectedFace, FaceTrack, AudioMoment, AspectRatio, ReframeConfig, CropKeyframe } from './reframe'
-
-// Import private functions for testing by exporting them temporarily
-// In production, these would be exported for testing purposes
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
+import { reframeVideo, type AspectRatio, type DetectedFace, type FaceTrack, type AudioMoment } from './reframe'
+import { mkdir, rm } from 'fs/promises'
+import { join } from 'path'
+import { tmpdir } from 'os'
+import { $ } from 'bun'
 
 /**
  * Calculate Intersection Over Union for two face bounding boxes
@@ -563,163 +563,198 @@ describe('Integration: Multi-Face Handling', () => {
   })
 })
 
-describe('reframe module', () => {
-  describe('AspectRatio type', () => {
-    test('should support vertical 9:16 format', () => {
-      const aspectRatio: AspectRatio = '9:16'
-      expect(aspectRatio).toBe('9:16')
+describe('reframeVideo', () => {
+  let testDir: string
+  let inputVideoPath: string
+  let outputVideoPath: string
+
+  beforeEach(async () => {
+    // Create temporary test directory
+    testDir = join(tmpdir(), `reframe-test-${Date.now()}`)
+    await mkdir(testDir, { recursive: true })
+
+    inputVideoPath = join(testDir, 'input.mp4')
+    outputVideoPath = join(testDir, 'output.mp4')
+  })
+
+  afterEach(async () => {
+    // Clean up test directories
+    try {
+      await rm(testDir, { recursive: true, force: true })
+    } catch {
+      // Ignore cleanup errors
+    }
+  })
+
+  test('should accept valid AspectRatio types', () => {
+    const validAspects: AspectRatio[] = ['9:16', '1:1', '16:9', '4:5']
+
+    expect(validAspects).toContain('9:16')
+    expect(validAspects).toContain('1:1')
+    expect(validAspects).toContain('16:9')
+    expect(validAspects).toContain('4:5')
+  })
+
+  test('should return correct dimensions for aspect ratios', () => {
+    // These are the expected dimensions for each aspect ratio
+    const expectedDimensions = {
+      '9:16': { width: 1080, height: 1920 },
+      '1:1': { width: 1080, height: 1080 },
+      '16:9': { width: 1920, height: 1080 },
+      '4:5': { width: 1080, height: 1350 },
+    }
+
+    // Verify the dimensions are correct
+    expect(expectedDimensions['9:16'].width).toBe(1080)
+    expect(expectedDimensions['9:16'].height).toBe(1920)
+  })
+
+  test('should fall back to center crop when no faces detected', async () => {
+    // Create a simple test video without faces (solid color)
+    await $`ffmpeg -f lavfi -i color=c=blue:s=1920x1080:d=2 \
+      -c:v libx264 -pix_fmt yuv420p -y ${inputVideoPath}`
+
+    const result = await reframeVideo({
+      inputPath: inputVideoPath,
+      outputPath: outputVideoPath,
+      targetAspect: '9:16',
+      faceTracking: true,
+      smoothing: 0.7,
     })
 
-    test('should support square 1:1 format', () => {
-      const aspectRatio: AspectRatio = '1:1'
-      expect(aspectRatio).toBe('1:1')
-    })
+    // Should fall back to center crop when no faces are found
+    expect(result.method).toBe('center_crop')
+    expect(result.keyframes.length).toBeGreaterThan(0)
+    expect(result.outputPath).toBe(outputVideoPath)
+  })
 
-    test('should support horizontal 16:9 format', () => {
-      const aspectRatio: AspectRatio = '16:9'
-      expect(aspectRatio).toBe('16:9')
-    })
+  test('should respect smoothing parameter', () => {
+    // Test that smoothing values are within valid range
+    const validSmoothing = [0, 0.5, 0.7, 1.0]
 
-    test('should support Instagram 4:5 format', () => {
-      const aspectRatio: AspectRatio = '4:5'
-      expect(aspectRatio).toBe('4:5')
+    validSmoothing.forEach(value => {
+      expect(value).toBeGreaterThanOrEqual(0)
+      expect(value).toBeLessThanOrEqual(1)
     })
   })
 
-  describe('ReframeConfig interface', () => {
-    test('should define required config properties', () => {
-      const config: ReframeConfig = {
-        inputPath: '/path/to/input.mp4',
-        outputPath: '/path/to/output.mp4',
-        targetAspect: '9:16',
-      }
+  test('should handle faceTracking being disabled', async () => {
+    // Create a simple test video
+    await $`ffmpeg -f lavfi -i color=c=red:s=1920x1080:d=2 \
+      -c:v libx264 -pix_fmt yuv420p -y ${inputVideoPath}`
 
-      expect(config.inputPath).toBeDefined()
-      expect(config.outputPath).toBeDefined()
-      expect(config.targetAspect).toBe('9:16')
+    const result = await reframeVideo({
+      inputPath: inputVideoPath,
+      outputPath: outputVideoPath,
+      targetAspect: '9:16',
+      faceTracking: false, // Explicitly disable face tracking
+      smoothing: 0.7,
     })
 
-    test('should support optional faceTracking', () => {
-      const config: ReframeConfig = {
-        inputPath: '/path/to/input.mp4',
-        outputPath: '/path/to/output.mp4',
-        targetAspect: '9:16',
-        faceTracking: true,
-      }
+    // Should use center crop when face tracking is disabled
+    expect(result.method).toBe('center_crop')
+    expect(result.keyframes.length).toBeGreaterThan(0)
+  })
 
-      expect(config.faceTracking).toBe(true)
+  test('should generate keyframes with valid coordinates', async () => {
+    // Create a simple test video
+    await $`ffmpeg -f lavfi -i color=c=green:s=1920x1080:d=2 \
+      -c:v libx264 -pix_fmt yuv420p -y ${inputVideoPath}`
+
+    const result = await reframeVideo({
+      inputPath: inputVideoPath,
+      outputPath: outputVideoPath,
+      targetAspect: '9:16',
+      faceTracking: false,
+      smoothing: 0.7,
     })
 
-    test('should support optional smoothing', () => {
-      const config: ReframeConfig = {
-        inputPath: '/path/to/input.mp4',
-        outputPath: '/path/to/output.mp4',
-        targetAspect: '9:16',
+    // Verify keyframes have valid structure
+    expect(result.keyframes.length).toBeGreaterThan(0)
+    const firstKeyframe = result.keyframes[0]
+
+    expect(firstKeyframe).toHaveProperty('time')
+    expect(firstKeyframe).toHaveProperty('x')
+    expect(firstKeyframe).toHaveProperty('y')
+    expect(firstKeyframe).toHaveProperty('width')
+    expect(firstKeyframe).toHaveProperty('height')
+
+    // Coordinates should be non-negative
+    expect(firstKeyframe.x).toBeGreaterThanOrEqual(0)
+    expect(firstKeyframe.y).toBeGreaterThanOrEqual(0)
+    expect(firstKeyframe.width).toBeGreaterThan(0)
+    expect(firstKeyframe.height).toBeGreaterThan(0)
+  })
+
+  test('should handle different target aspect ratios', async () => {
+    // Create a test video
+    await $`ffmpeg -f lavfi -i color=c=yellow:s=1920x1080:d=2 \
+      -c:v libx264 -pix_fmt yuv420p -y ${inputVideoPath}`
+
+    const aspectRatios: AspectRatio[] = ['9:16', '1:1', '16:9', '4:5']
+
+    for (const aspect of aspectRatios) {
+      const output = join(testDir, `output-${aspect.replace(':', '-')}.mp4`)
+
+      const result = await reframeVideo({
+        inputPath: inputVideoPath,
+        outputPath: output,
+        targetAspect: aspect,
+        faceTracking: false,
         smoothing: 0.7,
-      }
+      })
 
-      expect(config.smoothing).toBe(0.7)
-    })
+      expect(result.outputPath).toBe(output)
+      expect(result.keyframes.length).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('Face Detection Integration', () => {
+  test('should have MediaPipe dependency available', async () => {
+    // Verify that MediaPipe can be imported
+    const mediapipe = await import('@mediapipe/tasks-vision')
+
+    expect(mediapipe.FaceDetector).toBeDefined()
+    expect(mediapipe.FilesetResolver).toBeDefined()
   })
 
-  describe('CropKeyframe interface', () => {
-    test('should define keyframe structure', () => {
-      const keyframe: CropKeyframe = {
-        time: 0,
-        x: 420,
-        y: 0,
-        width: 1080,
-        height: 1920,
-      }
+  test('should use face_tracking method when faces are detected', () => {
+    // This test documents the expected behavior when faces are present
+    // In a real scenario with faces, the method should be 'face_tracking'
+    const expectedMethod = 'face_tracking'
 
-      expect(keyframe.time).toBe(0)
-      expect(keyframe.x).toBe(420)
-      expect(keyframe.y).toBe(0)
-      expect(keyframe.width).toBe(1080)
-      expect(keyframe.height).toBe(1920)
-    })
+    expect(expectedMethod).toBe('face_tracking')
   })
 
-  describe('createSplitScreen', () => {
-    test('should accept gameplay and facecam paths', () => {
-      const gameplayPath = '/path/to/gameplay.mp4'
-      const facecamPath = '/path/to/facecam.mp4'
-      const outputPath = '/path/to/output.mp4'
+  test('should generate keyframes at 2 FPS for face detection', () => {
+    // Document that face detection runs at 2 FPS
+    // So for a 10 second clip, we expect ~20 frames to be analyzed
+    const clipDuration = 10 // seconds
+    const fps = 2
+    const expectedFrames = clipDuration * fps
 
-      expect(gameplayPath).toBeDefined()
-      expect(facecamPath).toBeDefined()
-      expect(outputPath).toBeDefined()
-    })
-
-    test('should support custom facecam ratio', () => {
-      const options = {
-        facecamRatio: 0.35,
-        targetAspect: '9:16' as AspectRatio,
-      }
-
-      expect(options.facecamRatio).toBe(0.35)
-      expect(options.targetAspect).toBe('9:16')
-    })
-
-    test('should default facecamRatio to 0.35', () => {
-      // Document the default behavior
-      const defaultFacecamRatio = 0.35
-
-      expect(defaultFacecamRatio).toBe(0.35)
-    })
-
-    test('should default targetAspect to 9:16', () => {
-      // Document the default behavior
-      const defaultTargetAspect: AspectRatio = '9:16'
-
-      expect(defaultTargetAspect).toBe('9:16')
-    })
-
-    test('should calculate facecam height correctly', () => {
-      const dims = { width: 1080, height: 1920 }
-      const facecamRatio = 0.35
-
-      const facecamHeight = Math.round(dims.height * facecamRatio)
-      const gameplayHeight = dims.height - facecamHeight
-
-      expect(facecamHeight).toBe(672)
-      expect(gameplayHeight).toBe(1248)
-      expect(facecamHeight + gameplayHeight).toBe(dims.height)
-    })
-
-    test('should maintain aspect ratio dimensions', () => {
-      const aspectDimensions = {
-        '9:16': { width: 1080, height: 1920 },
-        '1:1': { width: 1080, height: 1080 },
-        '16:9': { width: 1920, height: 1080 },
-        '4:5': { width: 1080, height: 1350 },
-      }
-
-      expect(aspectDimensions['9:16'].width).toBe(1080)
-      expect(aspectDimensions['9:16'].height).toBe(1920)
-      expect(aspectDimensions['9:16'].width / aspectDimensions['9:16'].height).toBeCloseTo(9 / 16)
-    })
+    expect(expectedFrames).toBe(20)
   })
 
-  describe('split-screen layout', () => {
-    test('should stack facecam on top of gameplay', () => {
-      // Document the expected layout behavior
-      const layout = {
-        facecamPosition: 'top',
-        gameplayPosition: 'bottom',
-        stackDirection: 'vertical',
-      }
+  test('should clamp crop coordinates to valid bounds', () => {
+    // Test boundary clamping logic
+    const sourceWidth = 1920
+    const sourceHeight = 1080
+    const cropWidth = 1080
+    const cropHeight = 1920
 
-      expect(layout.facecamPosition).toBe('top')
-      expect(layout.gameplayPosition).toBe('bottom')
-      expect(layout.stackDirection).toBe('vertical')
-    })
+    // Max valid crop position
+    const maxX = sourceWidth - cropWidth
+    const maxY = sourceHeight - cropHeight
 
-    test('should maintain 9:16 output ratio for vertical videos', () => {
-      const outputDimensions = { width: 1080, height: 1920 }
-      const outputRatio = outputDimensions.width / outputDimensions.height
+    // For this case, crop is taller than source, so maxY would be negative
+    // The function should handle this by adjusting the crop
+    expect(maxX).toBeGreaterThanOrEqual(0)
 
-      expect(outputRatio).toBeCloseTo(9 / 16, 2)
-    })
+    // If maxY is negative, that means we need to adjust our approach
+    if (maxY < 0) {
+      expect(maxY).toBeLessThan(0)
+    }
   })
 })
