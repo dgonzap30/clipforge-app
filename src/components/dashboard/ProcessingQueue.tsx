@@ -15,7 +15,7 @@ export function ProcessingQueue({ jobs }: ProcessingQueueProps) {
           View all <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
-      
+
       <div className="p-4 space-y-4">
         {jobs.map((job) => (
           <div key={job.id} className="space-y-2">
@@ -44,6 +44,38 @@ export function ProcessingQueue({ jobs }: ProcessingQueueProps) {
             No streams processing
           </p>
         )}
+
+        {!loading && activeJobs.map((job) => (
+          <div key={job.id} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {job.progress > 0 ? (
+                  <Loader2 className="w-4 h-4 text-forge-400 animate-spin flex-shrink-0" />
+                ) : (
+                  <div className="w-4 h-4 rounded-full border-2 border-dark-600 flex-shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{job.title}</p>
+                  <p className="text-xs text-dark-400">{getStatusText(job.status)}</p>
+                </div>
+              </div>
+              <span className="text-sm text-dark-400 flex-shrink-0 ml-2">
+                {Math.round(job.progress)}%
+              </span>
+            </div>
+            <div className="h-1.5 bg-dark-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-forge-500 transition-all duration-300"
+                style={{ width: `${job.progress}%` }}
+              />
+            </div>
+            {job.clipsFound > 0 && (
+              <p className="text-xs text-dark-500">
+                {job.clipsFound} {job.clipsFound === 1 ? 'clip' : 'clips'} found
+              </p>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )
