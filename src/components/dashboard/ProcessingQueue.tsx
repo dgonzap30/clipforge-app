@@ -1,14 +1,33 @@
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { ProcessingJob } from '@/lib/api'
 
-// Placeholder data
-const processingItems = [
-  { id: '1', title: 'Late Night Stream', progress: 67 },
-  { id: '2', title: 'Ranked Grind', progress: 23 },
-  { id: '3', title: 'Just Chatting', progress: 0 },
-]
+interface ProcessingQueueProps {
+  jobs: ProcessingJob[]
+  loading?: boolean
+}
 
-export function ProcessingQueue() {
+// Get display text for job status
+function getStatusText(status: ProcessingJob['status']): string {
+  const statusMap: Record<ProcessingJob['status'], string> = {
+    queued: 'Queued',
+    downloading: 'Downloading',
+    analyzing: 'Analyzing',
+    extracting: 'Extracting clips',
+    reframing: 'Reframing',
+    captioning: 'Adding captions',
+    completed: 'Completed',
+    failed: 'Failed',
+  }
+  return statusMap[status] || status
+}
+
+export function ProcessingQueue({ jobs, loading = false }: ProcessingQueueProps) {
+  // Filter to only show non-completed/failed jobs, limit to 3 most recent
+  const activeJobs = jobs
+    .filter(job => !['completed', 'failed'].includes(job.status))
+    .slice(0, 3)
+
   return (
     <div className="card">
       <div className="p-4 border-b border-dark-800 flex items-center justify-between">
@@ -17,35 +36,51 @@ export function ProcessingQueue() {
           View all <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
-      
+
       <div className="p-4 space-y-4">
-        {processingItems.map((item) => (
-          <div key={item.id} className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {item.progress > 0 ? (
-                  <Loader2 className="w-4 h-4 text-forge-400 animate-spin" />
-                ) : (
-                  <div className="w-4 h-4 rounded-full border-2 border-dark-600" />
-                )}
-                <span className="text-sm font-medium truncate">{item.title}</span>
-              </div>
-              <span className="text-sm text-dark-400">{item.progress}%</span>
-            </div>
-            <div className="h-1.5 bg-dark-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-forge-500 transition-all duration-300"
-                style={{ width: `${item.progress}%` }}
-              />
-            </div>
-          </div>
-        ))}
-        
-        {processingItems.length === 0 && (
+        {loading && (
+          <p className="text-sm text-dark-500 text-center py-4">
+            Loading queue...
+          </p>
+        )}
+
+        {!loading && activeJobs.length === 0 && (
           <p className="text-sm text-dark-500 text-center py-4">
             No streams processing
           </p>
         )}
+
+        {!loading && activeJobs.map((job) => (
+          <div key={job.id} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {job.progress > 0 ? (
+                  <Loader2 className="w-4 h-4 text-forge-400 animate-spin flex-shrink-0" />
+                ) : (
+                  <div className="w-4 h-4 rounded-full border-2 border-dark-600 flex-shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{job.title}</p>
+                  <p className="text-xs text-dark-400">{getStatusText(job.status)}</p>
+                </div>
+              </div>
+              <span className="text-sm text-dark-400 flex-shrink-0 ml-2">
+                {Math.round(job.progress)}%
+              </span>
+            </div>
+            <div className="h-1.5 bg-dark-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-forge-500 transition-all duration-300"
+                style={{ width: `${job.progress}%` }}
+              />
+            </div>
+            {job.clipsFound > 0 && (
+              <p className="text-xs text-dark-500">
+                {job.clipsFound} {job.clipsFound === 1 ? 'clip' : 'clips'} found
+              </p>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )

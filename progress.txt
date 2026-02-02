@@ -1,0 +1,60 @@
+Dashboard Wiring Implementation
+
+Task: Wire src/pages/Dashboard.tsx: replace hardcoded stats with useClips/useJobs hooks, pass real data to RecentClips and ProcessingQueue
+
+Changes Made:
+
+1. Created useClips Hook (src/hooks/useClips.ts)
+   - Implemented useClips hook following the same pattern as useJobs
+   - Added support for filtering by status, limit, offset
+   - Optional polling for real-time updates when clips are processing
+   - Methods: refresh, updateClip, deleteClip, bulkDelete, bulkExport
+   - Created useClip hook for fetching single clips
+   - Exported from src/hooks/index.ts
+
+2. Updated Dashboard.tsx (src/pages/Dashboard.tsx)
+   - Imported and used useClips hook with limit of 10 clips
+   - Imported and used useJobs hook to fetch all jobs and processing jobs
+   - Replaced hardcoded stats with real data calculations:
+     * Total Clips: Shows count of loaded clips
+     * Processing: Shows count of active jobs (not completed/failed)
+     * Best Performer: Shows highest HYDE score from clips
+     * Clips Today: Filters clips created today
+   - Passed real data to RecentClips and ProcessingQueue components
+   - Added loading states for better UX
+
+3. Updated RecentClips Component (src/components/dashboard/RecentClips.tsx)
+   - Added props interface to accept clips array and loading state
+   - Removed hardcoded placeholder data
+   - Display real clip data: title, status, duration, HYDE score
+   - Show thumbnail if available
+   - Format duration as MM:SS
+   - Format HYDE score as percentage
+   - Display appropriate messages for loading and empty states
+   - Limit display to first 4 clips
+
+4. Updated ProcessingQueue Component (src/components/dashboard/ProcessingQueue.tsx)
+   - Added props interface to accept jobs array and loading state
+   - Removed hardcoded placeholder data
+   - Display real job data: title, status, progress, clips found
+   - Filter to show only active jobs (not completed/failed)
+   - Show status text for each job stage
+   - Display clip count when clips are found
+   - Display appropriate messages for loading and empty states
+   - Limit display to first 3 active jobs
+
+Implementation Details:
+- All components now use TypeScript interfaces for type safety
+- Loading states prevent premature rendering
+- Empty states provide clear user feedback
+- Real-time polling enabled for processing jobs (5s interval)
+- Dashboard calculates stats dynamically from fetched data
+- Components handle edge cases (no data, loading, errors)
+
+Testing Recommendations:
+- Test with empty database (no clips/jobs)
+- Test with processing jobs to verify polling works
+- Test with completed clips to verify stats calculations
+- Verify loading states display correctly
+- Check that HYDE scores display as percentages
+- Verify job progress bars update in real-time
