@@ -9,3 +9,14 @@ export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE
     persistSession: false,
   },
 })
+
+// Verify Supabase JWT token and return user
+export async function verifySupabaseToken(token: string) {
+  const { data, error } = await supabase.auth.getUser(token)
+
+  if (error) {
+    return { user: null, error: error.message }
+  }
+
+  return { user: data.user, error: null }
+}
