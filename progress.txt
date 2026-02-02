@@ -1,0 +1,16 @@
+## Task: Update server/src/lib/env.ts
+
+### Changes Made:
+- Replaced S3-related environment variables with Supabase and OpenAI variables
+- Removed: S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION
+- Added: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, OPENAI_API_KEY
+- Maintained the same structure and format of the env configuration
+- The validateEnv() function remains unchanged (validation requirements will need to be updated in a separate task if needed)
+
+### Files Modified:
+- server/src/lib/env.ts
+
+### Notes:
+- The env object now exports Supabase credentials instead of S3-compatible storage credentials
+- OpenAI API key has been added for AI functionality
+- Default values remain empty strings to maintain consistency with other configuration
