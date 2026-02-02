@@ -1,16 +1,84 @@
-## Task: Update server/src/lib/env.ts
+## Task: Add caption style presets
 
 ### Changes Made:
-- Replaced S3-related environment variables with Supabase and OpenAI variables
-- Removed: S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION
-- Added: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, OPENAI_API_KEY
-- Maintained the same structure and format of the env configuration
-- The validateEnv() function remains unchanged (validation requirements will need to be updated in a separate task if needed)
+- Added 5 distinct caption style presets to provide users with different visual options for captions
+- Implemented preset system with full customization options (font, size, colors, position, border style, text transformation)
+- Updated UI to allow users to select from caption presets in settings
+- Added comprehensive test coverage for all presets
 
 ### Files Modified:
-- server/src/lib/env.ts
+1. **server/src/captions/transcribe.ts**
+   - Added `CaptionStyle` interface to define preset structure
+   - Created `CAPTION_PRESETS` constant with 5 presets:
+     - `bold-pop` (default): Arial Black, white/yellow, bold styling
+     - `clean-minimal`: Helvetica, white/cyan, subtle styling
+     - `hormozi`: Impact font, white/orange, ALL CAPS, centered
+     - `neon-glow`: Arial, cyan/magenta with glow border effect
+     - `comic`: Comic Sans MS, white/lime, playful style
+   - Updated `generateTikTokASS()` to accept preset parameter
+   - Added text transformation support (uppercase, lowercase, none)
+   - Preset can be overridden with custom options
+
+2. **server/src/pipeline/stages/caption.ts**
+   - Imported `CAPTION_PRESETS` type
+   - Updated `CaptionConfig.styling` interface to include:
+     - `preset` parameter
+     - `outlineWidth` parameter
+     - `borderStyle` parameter
+     - `textTransform` parameter
+
+3. **src/store/index.ts**
+   - Added `captionPreset` field to `Settings.output` type
+   - Default preset set to `'bold-pop'`
+   - Type union includes all 5 preset options
+
+4. **src/pages/Settings.tsx**
+   - Added Caption Preset dropdown selector to Output Settings section
+   - Provides descriptions for each preset option
+   - Integrated with Zustand store for persistence
+
+5. **server/src/captions/transcribe.test.ts** (NEW)
+   - Created comprehensive test suite with 19 tests
+   - Tests all 5 presets for correct configuration
+   - Tests preset application in ASS generation
+   - Tests preset override with custom options
+   - Tests text transformation (uppercase, lowercase, none)
+   - Tests positioning and styling parameters
+   - Tests word-level timing with presets
+
+### Implementation Details:
+
+**Preset System Architecture:**
+- Each preset is a complete style configuration object
+- Presets can be selected by name via `preset` parameter
+- Individual preset values can be overridden with custom options
+- Default preset is `'bold-pop'` to maintain backward compatibility
+
+**Supported Customizations per Preset:**
+- Font name and size
+- Primary text color (BGR format for ASS)
+- Highlight color for word-by-word animation
+- Outline color and width
+- Vertical position (top, center, bottom)
+- Border style (1=normal, 3=glow)
+- Text transformation (uppercase, lowercase, none)
+
+**Frontend Integration:**
+- Settings page now has preset selector
+- Preset selection is persisted in localStorage via Zustand
+- User can see descriptive labels for each preset
+- Default is Bold Pop to match existing behavior
+
+### Testing:
+- All 19 new tests pass (caption preset tests)
+- All 12 existing caption stage tests pass
+- All modified files pass linting
+- No breaking changes to existing functionality
 
 ### Notes:
-- The env object now exports Supabase credentials instead of S3-compatible storage credentials
-- OpenAI API key has been added for AI functionality
-- Default values remain empty strings to maintain consistency with other configuration
+- The preset system is fully backward compatible
+- Existing code using default values will get 'bold-pop' preset
+- Text transformation is applied to both segment text and word-by-word highlighting
+- Border style 3 creates a glow effect for neon-glow preset
+- Hormozi preset uses ALL CAPS transformation for emphasis
+- Each preset maintains readability on mobile devices per PRD requirements

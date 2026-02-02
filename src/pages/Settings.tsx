@@ -199,6 +199,25 @@ export function Settings() {
               <option value="tiktok">TikTok - Word-by-word animation</option>
             </select>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Caption Preset
+            </label>
+            <select
+              className="input"
+              value={formData.output.captionPreset}
+              onChange={(e) => updateFormData({
+                output: { ...formData.output, captionPreset: e.target.value as 'bold-pop' | 'clean-minimal' | 'hormozi' | 'neon-glow' | 'comic' }
+              })}
+            >
+              <option value="bold-pop">Bold Pop - Arial Black, white/yellow, bold (Default)</option>
+              <option value="clean-minimal">Clean Minimal - Helvetica, white/cyan, subtle</option>
+              <option value="hormozi">Hormozi - Impact, white/orange, ALL CAPS, centered</option>
+              <option value="neon-glow">Neon Glow - Arial, cyan/magenta, glowing outline</option>
+              <option value="comic">Comic - Comic Sans MS, white/lime, playful</option>
+            </select>
+          </div>
         </div>
       </section>
       

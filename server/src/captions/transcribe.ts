@@ -31,6 +31,76 @@ export interface TranscribeConfig {
   wordTimestamps?: boolean
 }
 
+export interface CaptionStyle {
+  fontName: string
+  fontSize: number
+  primaryColor: string
+  highlightColor: string
+  outlineColor: string
+  outlineWidth: number
+  position: 'bottom' | 'center' | 'top'
+  borderStyle?: number
+  textTransform?: 'uppercase' | 'lowercase' | 'none'
+}
+
+export const CAPTION_PRESETS: Record<string, CaptionStyle> = {
+  'bold-pop': {
+    fontName: 'Arial Black',
+    fontSize: 48,
+    primaryColor: '&HFFFFFF', // White
+    highlightColor: '&H00FFFF', // Yellow (BGR)
+    outlineColor: '&H000000', // Black
+    outlineWidth: 3,
+    position: 'bottom',
+    borderStyle: 1,
+    textTransform: 'none',
+  },
+  'clean-minimal': {
+    fontName: 'Helvetica',
+    fontSize: 42,
+    primaryColor: '&HFFFFFF', // White
+    highlightColor: '&HFFFF00', // Cyan (BGR)
+    outlineColor: '&H808080', // Gray
+    outlineWidth: 2,
+    position: 'bottom',
+    borderStyle: 1,
+    textTransform: 'none',
+  },
+  'hormozi': {
+    fontName: 'Impact',
+    fontSize: 52,
+    primaryColor: '&HFFFFFF', // White
+    highlightColor: '&H0080FF', // Orange (BGR)
+    outlineColor: '&H000000', // Black
+    outlineWidth: 4,
+    position: 'center',
+    borderStyle: 1,
+    textTransform: 'uppercase',
+  },
+  'neon-glow': {
+    fontName: 'Arial',
+    fontSize: 46,
+    primaryColor: '&HFFFF00', // Cyan (BGR)
+    highlightColor: '&HFF00FF', // Magenta (BGR)
+    outlineColor: '&HFF00FF', // Magenta (BGR)
+    outlineWidth: 5,
+    position: 'bottom',
+    borderStyle: 3, // Glow effect
+    textTransform: 'none',
+  },
+  'comic': {
+    fontName: 'Comic Sans MS',
+    fontSize: 44,
+    primaryColor: '&HFFFFFF', // White
+    highlightColor: '&H00FF00', // Lime (BGR)
+    outlineColor: '&H000000', // Black
+    outlineWidth: 3,
+    position: 'bottom',
+    borderStyle: 1,
+    textTransform: 'none',
+  },
+}
+
 /**
  * Transcribe audio using OpenAI Whisper API
  */
@@ -171,25 +241,35 @@ function pad(num: number, length: number = 2): string {
 export function generateTikTokASS(
   segments: TranscriptionSegment[],
   options: {
+    preset?: keyof typeof CAPTION_PRESETS
     fontSize?: number
     fontName?: string
     primaryColor?: string // BGR format for ASS
     highlightColor?: string
     outlineColor?: string
     position?: 'bottom' | 'center' | 'top'
+    outlineWidth?: number
+    borderStyle?: number
+    textTransform?: 'uppercase' | 'lowercase' | 'none'
   } = {}
 ): string {
+  // Load preset if specified, otherwise use defaults
+  const preset = options.preset ? CAPTION_PRESETS[options.preset] : CAPTION_PRESETS['bold-pop']
+
   const {
-    fontSize = 48,
-    fontName = 'Arial Black',
-    primaryColor = '&HFFFFFF', // White
-    highlightColor = '&H00FFFF', // Yellow (BGR)
-    outlineColor = '&H000000', // Black
-    position = 'center',
+    fontSize = preset.fontSize,
+    fontName = preset.fontName,
+    primaryColor = preset.primaryColor,
+    highlightColor = preset.highlightColor,
+    outlineColor = preset.outlineColor,
+    position = preset.position,
+    outlineWidth = preset.outlineWidth,
+    borderStyle = preset.borderStyle ?? 1,
+    textTransform = preset.textTransform ?? 'none',
   } = options
   
   const yPosition = position === 'bottom' ? 800 : position === 'top' ? 200 : 540
-  
+
   const header = `[Script Info]
 Title: ClipForge Captions
 ScriptType: v4.00+
@@ -198,20 +278,32 @@ PlayResY: 1920
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${fontName},${fontSize},${primaryColor},${highlightColor},${outlineColor},&H80000000,-1,0,0,0,100,100,0,0,1,3,0,2,10,10,${yPosition},1
-Style: Highlight,${fontName},${fontSize},${highlightColor},${primaryColor},${outlineColor},&H80000000,-1,0,0,0,100,100,0,0,1,3,0,2,10,10,${yPosition},1
+Style: Default,${fontName},${fontSize},${primaryColor},${highlightColor},${outlineColor},&H80000000,-1,0,0,0,100,100,0,0,${borderStyle},${outlineWidth},0,2,10,10,${yPosition},1
+Style: Highlight,${fontName},${fontSize},${highlightColor},${primaryColor},${outlineColor},&H80000000,-1,0,0,0,100,100,0,0,${borderStyle},${outlineWidth},0,2,10,10,${yPosition},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `
 
+  // Helper to apply text transformation
+  const transformText = (text: string): string => {
+    switch (textTransform) {
+      case 'uppercase':
+        return text.toUpperCase()
+      case 'lowercase':
+        return text.toLowerCase()
+      default:
+        return text
+    }
+  }
+
   const events: string[] = []
-  
+
   for (const segment of segments) {
     if (!segment.words || segment.words.length === 0) {
       // No word-level timing, show whole segment
       events.push(
-        `Dialogue: 0,${formatASSTime(segment.start)},${formatASSTime(segment.end)},Default,,0,0,0,,${escapeASS(segment.text)}`
+        `Dialogue: 0,${formatASSTime(segment.start)},${formatASSTime(segment.end)},Default,,0,0,0,,${escapeASS(transformText(segment.text))}`
       )
       continue
     }
@@ -219,12 +311,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     // Word-by-word highlighting
     for (let i = 0; i < segment.words.length; i++) {
       const word = segment.words[i]
-      
+
       // Build text with current word highlighted
-      const before = segment.words.slice(0, i).map(w => w.word).join(' ')
-      const current = word.word
-      const after = segment.words.slice(i + 1).map(w => w.word).join(' ')
-      
+      const before = segment.words.slice(0, i).map(w => transformText(w.word)).join(' ')
+      const current = transformText(word.word)
+      const after = segment.words.slice(i + 1).map(w => transformText(w.word)).join(' ')
+
       const text = [
         before ? `{\\c${primaryColor}}${escapeASS(before)} ` : '',
         `{\\c${highlightColor}}${escapeASS(current)}`,
