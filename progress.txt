@@ -1,0 +1,44 @@
+# Agent 28 Progress
+
+## Task: Create server/src/queue/worker.ts: BullMQ Worker with concurrency 1
+
+### Completed:
+1. Created `server/src/queue/connection.ts` - Redis connection factory for BullMQ using env.REDIS_URL with proper configuration for BullMQ (maxRetriesPerRequest: null)
+
+2. Created `server/src/queue/processingQueue.ts` - BullMQ Queue named 'vod-processing' with:
+   - Interface for VodProcessingJobData (contains jobId)
+   - Default job options with 3 retry attempts and exponential backoff
+   - Job retention policies (100 completed, 100 failed)
+
+3. Created `server/src/pipeline/orchestrator.ts` - Stub implementation with:
+   - PipelineContext and PipelineResult interfaces
+   - runPipeline function that accepts jobId
+   - Comprehensive documentation of planned pipeline stages
+   - Error handling structure for future implementation
+
+4. Created `server/src/queue/worker.ts` - Main BullMQ Worker with:
+   - Concurrency set to 1 (processes one job at a time)
+   - Calls runPipeline from orchestrator for each job
+   - Comprehensive error handling and logging
+   - Event handlers for completed, failed, error, and ready events
+   - Graceful shutdown handler (closeWorker function)
+   - Proper TypeScript typing with VodProcessingJobData interface
+
+5. Created `server/src/queue/worker.test.ts` - Basic test suite with:
+   - Tests for worker definition and configuration
+   - Test for concurrency setting
+   - Test for queue operations
+   - Proper cleanup in afterAll hook
+
+### Implementation Details:
+- Worker processes jobs sequentially (concurrency: 1) to avoid resource contention during video processing
+- Worker properly integrates with the orchestrator's runPipeline function
+- Comprehensive logging at each stage (job start, completion, failure)
+- BullMQ job retention configured (100 completed/failed jobs)
+- Graceful shutdown support for clean server termination
+- Redis connection properly configured with BullMQ requirements
+
+### Next Steps (for other tasks):
+- Update server/src/index.ts to import and start the worker
+- Update server/src/routes/jobs.ts POST handler to use processingQueue.add()
+- Implement actual pipeline stages in orchestrator.ts (download, analyze, extract, reframe, caption, upload)
