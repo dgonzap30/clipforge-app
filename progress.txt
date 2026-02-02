@@ -1,0 +1,90 @@
+## JobCard Component Implementation
+
+Created src/components/queue/JobCard.tsx with the following features:
+
+### Component Features:
+1. **Job Information Display**
+   - Title and channel name
+   - VOD duration formatted as HH:MM:SS or MM:SS
+   - External link to Twitch VOD (opens in new tab)
+   - Thumbnail placeholder (ready for actual thumbnails)
+
+2. **Status Indication**
+   - Visual status badges with appropriate colors
+   - Different icons for each status (spinner, checkmark, alert)
+   - Current step display for active processing jobs
+   - Status types: queued, downloading, analyzing, extracting, reframing, captioning, completed, failed
+
+3. **Progress Bar**
+   - Real-time progress display (0-100%)
+   - Color-coded (gray for queued, forge-500 for active)
+   - Only shown for non-terminal states
+   - Smooth transitions
+
+4. **Action Buttons**
+   - Cancel button (for active jobs)
+   - Retry button (for failed jobs)
+   - Delete button (for any job)
+   - All buttons have tooltips and proper styling
+
+5. **Additional Information**
+   - Clips found counter (updates during processing)
+   - Error messages for failed jobs
+   - Success message with clip count for completed jobs
+   - Proper singular/plural handling
+
+### Type Safety:
+- Fully typed with TypeScript
+- Uses ProcessingJob and JobStatus types from @/lib/api
+- Props interface with optional callbacks
+
+### Styling:
+- Follows existing design system (card, buttons, colors)
+- Responsive layout with flexbox
+- Proper text truncation for long titles
+- Consistent spacing and sizing
+- Uses Lucide React icons
+
+### Testing:
+Created comprehensive test suite (JobCard.test.tsx) covering:
+- Rendering job information
+- Status display and transitions
+- Progress bar functionality
+- Action button interactions
+- Error and success states
+- Duration formatting
+- Singular/plural text handling
+- VOD link functionality
+
+Note: Tests require Vitest setup (instructions included in test file)
+
+### Files Created:
+- src/components/queue/JobCard.tsx (main component)
+- src/components/queue/JobCard.test.tsx (test suite)
+- src/components/queue/index.ts (exports)
+
+### Usage Example:
+```tsx
+import { JobCard } from '@/components/queue'
+import { useJobs } from '@/hooks/useJobs'
+
+function QueuePage() {
+  const { jobs, cancelJob, retryJob, deleteJob } = useJobs()
+
+  return (
+    <div className="space-y-3">
+      {jobs.map(job => (
+        <JobCard
+          key={job.id}
+          job={job}
+          onCancel={cancelJob}
+          onRetry={retryJob}
+          onDelete={deleteJob}
+        />
+      ))}
+    </div>
+  )
+}
+```
+
+The component integrates seamlessly with the existing API types and hooks system.
