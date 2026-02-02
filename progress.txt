@@ -1,0 +1,52 @@
+# Progress Update
+
+## Task: Update server/src/routes/jobs.ts POST handler with processingQueue.add()
+
+### Changes Made:
+
+1. **Created BullMQ Queue Infrastructure**
+   - Created `server/src/queue/connection.ts`: Redis connection factory for BullMQ
+     - Configured with proper BullMQ options (maxRetriesPerRequest: null)
+     - Added error and connect event handlers
+     - Uses REDIS_URL from env configuration
+
+   - Created `server/src/queue/processingQueue.ts`: BullMQ Queue for VOD processing
+     - Queue named 'vod-processing'
+     - Defined ProcessVodJobData interface with jobId field
+     - Configured default job options:
+       - 3 retry attempts with exponential backoff (5s delay)
+       - Removes completed jobs after 24 hours (keeps up to 1000)
+       - Removes failed jobs after 7 days
+     - Added error handling
+
+2. **Updated jobs.ts POST Handler**
+   - Added import for processingQueue from '../queue/processingQueue'
+   - Replaced setTimeout simulation (lines 137-145) with real BullMQ queue call:
+     ```typescript
+     await processingQueue.add('process-vod', { jobId: job.id })
+     ```
+   - Removed TODO comment and simulation code
+   - Now properly enqueues jobs for processing by workers
+
+3. **Added Tests**
+   - Created `server/src/__tests__/processingQueue.test.ts`:
+     - Tests queue is properly defined with correct name
+     - Tests job addition to queue
+     - Verifies default job options (attempts, backoff)
+
+   - Created `server/src/__tests__/jobs.integration.test.ts`:
+     - Tests POST /jobs endpoint adds job to processing queue
+     - Verifies job data structure and initial status
+     - Tests duplicate VOD prevention (409 conflict)
+     - Includes proper cleanup of test jobs
+
+### Technical Details:
+- Jobs are now properly enqueued in Redis via BullMQ
+- Worker processes can pick up jobs from the 'vod-processing' queue
+- Retry logic handles transient failures (3 attempts with exponential backoff)
+- Old jobs are automatically cleaned up to prevent Redis from growing indefinitely
+- The POST handler remains async and properly awaits queue addition
+
+### Next Steps:
+- The worker that processes these jobs should already be implemented (server/src/queue/worker.ts)
+- The server index.ts should import and start the worker on server startup

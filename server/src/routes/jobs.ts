@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { nanoid } from 'nanoid'
+import { processingQueue } from '../queue/processingQueue'
 
 export const jobsRoutes = new Hono()
 
@@ -129,21 +130,10 @@ jobsRoutes.post('/', zValidator('json', createJobSchema), async (c) => {
   }
   
   jobs.set(job.id, job)
-  
-  // TODO: Add to BullMQ queue for processing
-  // await processingQueue.add('process-vod', { jobId: job.id })
-  
-  // For now, simulate processing start
-  setTimeout(() => {
-    const j = jobs.get(job.id)
-    if (j && j.status === 'queued') {
-      j.status = 'downloading'
-      j.progress = 5
-      j.currentStep = 'Downloading VOD...'
-      j.updatedAt = new Date().toISOString()
-    }
-  }, 1000)
-  
+
+  // Add to BullMQ queue for processing
+  await processingQueue.add('process-vod', { jobId: job.id })
+
   return c.json(job, 201)
 })
 
