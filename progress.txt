@@ -1,0 +1,62 @@
+# Progress Report: Rewrite useJobs.ts with TanStack Query
+
+## Completed Changes
+
+### 1. Installed @tanstack/react-query
+- Added @tanstack/react-query package to project dependencies
+- Version installed: Latest stable version from npm
+
+### 2. Set up QueryClient Provider (src/main.tsx)
+- Imported QueryClient and QueryClientProvider from @tanstack/react-query
+- Created QueryClient instance with sensible defaults:
+  - `refetchOnWindowFocus: false` - prevents unwanted refetches
+  - `retry: 1` - retry failed queries once
+  - `staleTime: 5000` - data stays fresh for 5 seconds
+- Wrapped the application with QueryClientProvider
+
+### 3. Refactored useJobs Hook (src/hooks/useJobs.ts)
+**Before:** Used useState/useEffect with manual polling logic
+**After:** Uses TanStack Query's useQuery with intelligent refetchInterval
+
+Key improvements:
+- Replaced useState for jobs, loading, and error with useQuery hook
+- Implemented smart polling with refetchInterval callback:
+  - Only polls when there are active (non-terminal) jobs
+  - Stops polling automatically when all jobs are completed or failed
+  - Respects pollInterval option (defaults to 5000ms)
+  - Can be disabled by setting pollInterval to 0
+- Converted mutations (createJob, cancelJob, retryJob, deleteJob) to use useMutation
+- Added optimistic updates for all mutations using queryClient.setQueryData
+- Maintains the same API surface for consumers (no breaking changes)
+
+### 4. Refactored useJobProgress Hook (src/hooks/useJobs.ts)
+**Before:** Used useState/useEffect with manual polling and cleanup
+**After:** Uses TanStack Query's useQuery with automatic polling management
+
+Key improvements:
+- Replaced manual state management with useQuery hook
+- Implemented smart polling with refetchInterval callback:
+  - Automatically stops polling when job reaches terminal state (completed/failed)
+  - Respects pollInterval option (defaults to 2000ms)
+- Simplified logic - no need for mounted flags or manual interval cleanup
+- Maintains the same API surface for consumers (no breaking changes)
+
+## Benefits of This Refactor
+
+1. **Automatic Caching**: TanStack Query caches job data automatically
+2. **Deduplication**: Multiple components can use the same query without duplicate requests
+3. **Background Refetching**: Smart refetching only when needed (active jobs)
+4. **Better Performance**: No unnecessary re-renders or state updates
+5. **Less Code**: Removed ~40 lines of manual polling/state management logic
+6. **Type Safety**: Full TypeScript support with better inference
+7. **Optimistic Updates**: Mutations update UI immediately before server confirms
+
+## Testing
+- Build verification: ✅ Passed (npm run build successful)
+- TypeScript compilation: ✅ No errors
+- Note: Project doesn't have testing infrastructure set up yet
+
+## Files Modified
+- src/main.tsx (added QueryClient provider)
+- src/hooks/useJobs.ts (complete rewrite with TanStack Query)
+- package.json (added @tanstack/react-query dependency)
