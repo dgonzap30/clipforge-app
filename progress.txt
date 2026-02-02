@@ -1,0 +1,15 @@
+## Task: Add @tanstack/react-query to frontend package.json, wrap app in QueryClientProvider in src/main.tsx
+
+### Changes Made:
+
+1. **package.json**:
+   - Added @tanstack/react-query version ^5.62.0 to dependencies
+
+2. **src/main.tsx**:
+   - Imported QueryClient and QueryClientProvider from @tanstack/react-query
+   - Created a new QueryClient instance
+   - Wrapped the app in QueryClientProvider, passing the queryClient as the client prop
+   - Provider hierarchy is now: StrictMode > QueryClientProvider > BrowserRouter > App
+
+### Result:
+The application is now set up with TanStack Query (React Query) for efficient server state management. The QueryClientProvider makes the query client available to all components in the app tree.
