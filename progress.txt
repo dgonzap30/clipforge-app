@@ -1,0 +1,162 @@
+VodBrowserModal Component Implementation
+=========================================
+
+Completed: 2026-02-01
+
+Summary
+-------
+Created a comprehensive VodBrowserModal component at src/components/queue/VodBrowserModal.tsx
+that enables users to search for Twitch channels, browse their VODs, configure processing
+settings, and submit jobs to the processing queue.
+
+Files Created
+-------------
+1. src/components/queue/VodBrowserModal.tsx (main component)
+2. src/components/queue/VodBrowserModal.test.tsx (comprehensive test suite)
+
+Component Features
+------------------
+
+1. Modal Overlay and Structure
+   - Full-screen modal overlay with dark background
+   - Responsive card-based layout with max-width of 5xl
+   - Scrollable content area with fixed header and footer
+   - Close button in header and cancel button in footer
+   - Disabled interactions when submitting
+
+2. Channel Search Functionality
+   - Search input with icon
+   - Form submission on Enter key
+   - Loading state during search
+   - Error handling with user-friendly messages
+   - Channel info display with avatar, display name, and login
+   - API integration with api.vods.getByChannel()
+
+3. VOD Browsing and Selection
+   - Grid/list view of VODs with thumbnails
+   - VOD metadata display:
+     - Title
+     - Duration (formatted)
+     - View count
+     - Created date
+   - Visual selection state (highlighted border)
+   - Scrollable VOD list with max-height
+   - Empty state message when no VODs found
+
+4. Processing Settings Configuration
+   - Duration Range:
+     - Min duration (5-120 seconds, default: 15)
+     - Max duration (5-120 seconds, default: 60)
+
+   - Detection Sensitivity:
+     - Low (fewer clips, higher quality)
+     - Medium (balanced) - default
+     - High (more clips, lower quality)
+
+   - Detection Methods (all enabled by default):
+     - Chat Analysis
+     - Audio Peaks
+     - Face Reactions
+
+   - Output Settings:
+     - Format selection (vertical/square/horizontal, default: vertical)
+     - Auto Captions toggle (default: enabled)
+
+   All settings follow the same UI patterns as the Settings page
+
+5. Job Submission Logic
+   - Validates VOD selection before enabling submit
+   - Creates job with all VOD metadata and settings
+   - Loading state during submission
+   - Error handling with error messages
+   - Calls onJobCreated callback with created job
+   - Closes modal on success
+   - Integrates with api.jobs.create()
+
+Technical Implementation
+------------------------
+
+State Management:
+- React hooks (useState) for local state
+- Controlled form inputs
+- Proper state reset on modal close
+
+API Integration:
+- Uses @/lib/api for all API calls
+- Proper TypeScript typing with VOD and ProcessingJob interfaces
+- Error handling for network failures
+
+UI/UX:
+- Consistent with existing component patterns
+- Uses Tailwind CSS classes from design system
+- Lucide React icons throughout
+- Loading spinners for async operations
+- Error alerts with AlertCircle icon
+- Disabled states for buttons during operations
+
+Accessibility:
+- Semantic HTML structure
+- Proper button types
+- Form submission handling
+- Keyboard navigation support
+
+Testing
+-------
+Created comprehensive test suite covering:
+- Rendering states (open/closed)
+- Channel search flow
+- VOD selection
+- Settings configuration
+- Job submission
+- Error handling
+- Modal controls
+
+Note: Tests require Vitest and React Testing Library to be added to the project.
+Required dependencies:
+- vitest
+- @testing-library/react
+- @testing-library/jest-dom
+- @testing-library/user-event
+
+Integration Points
+------------------
+The component is ready to be integrated into the Queue page by:
+1. Importing the component
+2. Adding state for modal open/close
+3. Connecting to the "Add Stream" button
+4. Handling the onJobCreated callback to refresh the queue
+
+Example usage:
+```tsx
+import { VodBrowserModal } from '@/components/queue/VodBrowserModal'
+
+const [isModalOpen, setIsModalOpen] = useState(false)
+
+<button onClick={() => setIsModalOpen(true)}>Add Stream</button>
+
+<VodBrowserModal
+  isOpen={isModalOpen}
+  onClose={() => setIsModalOpen(false)}
+  onJobCreated={(job) => {
+    // Refresh jobs list or show notification
+  }}
+/>
+```
+
+Design Decisions
+----------------
+1. Modal instead of separate page - keeps user in context
+2. Step-by-step flow (search → select → configure) - clear progression
+3. Settings inline with VOD selection - quick workflow
+4. Default settings match Settings page - consistency
+5. Visual feedback for all states - better UX
+6. Keyboard support - accessibility
+
+Future Enhancements
+-------------------
+- Pagination for channels with many VODs
+- VOD filtering/sorting options
+- Recent searches history
+- Settings presets/templates
+- Bulk job creation
+- VOD preview player
