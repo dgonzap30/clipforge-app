@@ -3,6 +3,7 @@ import { getCookie } from 'hono/cookie'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { TwitchClient, parseTwitchDuration } from '../lib/twitch'
+import { supabase } from '../lib/supabase'
 
 export const vodsRoutes = new Hono()
 
@@ -23,14 +24,14 @@ const requireAuth = async (c: any, next: any) => {
 // Get VODs for the authenticated user
 vodsRoutes.get('/mine', requireAuth, async (c) => {
   const client = c.get('twitchClient') as TwitchClient
-  
+
   try {
     const user = await client.getUser()
     const { data: videos, pagination } = await client.getVideos(user.id, {
       type: 'archive',
       first: 20,
     })
-    
+
     // Transform to our format
     const vods = videos.map(v => ({
       id: v.id,
@@ -43,9 +44,38 @@ vodsRoutes.get('/mine', requireAuth, async (c) => {
       createdAt: v.created_at,
       streamId: v.stream_id,
     }))
-    
-    return c.json({ 
-      vods, 
+
+    // Upsert VODs to Supabase
+    if (vods.length > 0) {
+      const vodsForDb = videos.map(v => ({
+        id: v.id,
+        user_id: user.id,
+        title: v.title,
+        description: v.description || null,
+        duration: parseTwitchDuration(v.duration),
+        duration_formatted: v.duration,
+        thumbnail_url: v.thumbnail_url,
+        url: v.url,
+        view_count: v.view_count,
+        created_at: v.created_at,
+        stream_id: v.stream_id,
+        type: v.type,
+        user_login: v.user_login,
+        user_name: v.user_name,
+      }))
+
+      const { error: upsertError } = await supabase
+        .from('vods')
+        .upsert(vodsForDb, { onConflict: 'id' })
+
+      if (upsertError) {
+        console.error('Failed to upsert VODs to database:', upsertError)
+        // Continue even if upsert fails - we still return the data from Twitch
+      }
+    }
+
+    return c.json({
+      vods,
       pagination,
       user: {
         id: user.id,
@@ -53,7 +83,7 @@ vodsRoutes.get('/mine', requireAuth, async (c) => {
         displayName: user.display_name,
       }
     })
-    
+
   } catch (err) {
     console.error('Failed to fetch VODs:', err)
     return c.json({ error: 'Failed to fetch VODs' }, 500)
@@ -66,19 +96,19 @@ vodsRoutes.get('/channel/:login', requireAuth, zValidator('param', z.object({
 })), async (c) => {
   const client = c.get('twitchClient') as TwitchClient
   const { login } = c.req.valid('param')
-  
+
   try {
     const user = await client.getUserByLogin(login)
-    
+
     if (!user) {
       return c.json({ error: 'Channel not found' }, 404)
     }
-    
+
     const { data: videos, pagination } = await client.getVideos(user.id, {
       type: 'archive',
       first: 20,
     })
-    
+
     const vods = videos.map(v => ({
       id: v.id,
       title: v.title,
@@ -90,9 +120,38 @@ vodsRoutes.get('/channel/:login', requireAuth, zValidator('param', z.object({
       createdAt: v.created_at,
       streamId: v.stream_id,
     }))
-    
-    return c.json({ 
-      vods, 
+
+    // Upsert VODs to Supabase
+    if (vods.length > 0) {
+      const vodsForDb = videos.map(v => ({
+        id: v.id,
+        user_id: user.id,
+        title: v.title,
+        description: v.description || null,
+        duration: parseTwitchDuration(v.duration),
+        duration_formatted: v.duration,
+        thumbnail_url: v.thumbnail_url,
+        url: v.url,
+        view_count: v.view_count,
+        created_at: v.created_at,
+        stream_id: v.stream_id,
+        type: v.type,
+        user_login: v.user_login,
+        user_name: v.user_name,
+      }))
+
+      const { error: upsertError } = await supabase
+        .from('vods')
+        .upsert(vodsForDb, { onConflict: 'id' })
+
+      if (upsertError) {
+        console.error('Failed to upsert VODs to database:', upsertError)
+        // Continue even if upsert fails - we still return the data from Twitch
+      }
+    }
+
+    return c.json({
+      vods,
       pagination,
       channel: {
         id: user.id,
@@ -101,7 +160,7 @@ vodsRoutes.get('/channel/:login', requireAuth, zValidator('param', z.object({
         profileImageUrl: user.profile_image_url,
       }
     })
-    
+
   } catch (err) {
     console.error('Failed to fetch channel VODs:', err)
     return c.json({ error: 'Failed to fetch VODs' }, 500)
@@ -112,14 +171,42 @@ vodsRoutes.get('/channel/:login', requireAuth, zValidator('param', z.object({
 vodsRoutes.get('/:id', requireAuth, async (c) => {
   const client = c.get('twitchClient') as TwitchClient
   const videoId = c.req.param('id')
-  
+
   try {
     const video = await client.getVideo(videoId)
-    
+
     if (!video) {
       return c.json({ error: 'VOD not found' }, 404)
     }
-    
+
+    // Upsert single VOD to Supabase
+    const vodForDb = {
+      id: video.id,
+      user_id: video.user_id,
+      title: video.title,
+      description: video.description || null,
+      duration: parseTwitchDuration(video.duration),
+      duration_formatted: video.duration,
+      thumbnail_url: video.thumbnail_url,
+      url: video.url,
+      view_count: video.view_count,
+      created_at: video.created_at,
+      stream_id: video.stream_id,
+      type: video.type,
+      user_login: video.user_login,
+      user_name: video.user_name,
+      muted_segments: video.muted_segments || null,
+    }
+
+    const { error: upsertError } = await supabase
+      .from('vods')
+      .upsert([vodForDb], { onConflict: 'id' })
+
+    if (upsertError) {
+      console.error('Failed to upsert VOD to database:', upsertError)
+      // Continue even if upsert fails - we still return the data from Twitch
+    }
+
     return c.json({
       id: video.id,
       title: video.title,
@@ -138,7 +225,7 @@ vodsRoutes.get('/:id', requireAuth, async (c) => {
         displayName: video.user_name,
       }
     })
-    
+
   } catch (err) {
     console.error('Failed to fetch VOD:', err)
     return c.json({ error: 'Failed to fetch VOD' }, 500)

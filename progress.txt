@@ -1,0 +1,112 @@
+# Progress Update - VODs Supabase Integration
+
+## Completed Tasks
+
+### 1. Installed @supabase/supabase-js
+- Added @supabase/supabase-js dependency to server/package.json
+- Ran bun install to install the package
+
+### 2. Created Supabase Client Library
+- Created server/src/lib/supabase.ts
+- Initialized Supabase client with service role key for server-side operations
+- Configured auth settings (autoRefreshToken: false, persistSession: false)
+
+### 3. Updated Environment Configuration
+- Updated server/src/lib/env.ts to include:
+  - SUPABASE_URL
+  - SUPABASE_SERVICE_ROLE_KEY
+  - SUPABASE_ANON_KEY
+  - OPENAI_API_KEY
+
+### 4. Updated VODs Routes to Upsert to Supabase
+Modified server/src/routes/vods.ts to upsert VODs after fetching from Twitch API:
+
+#### GET /mine endpoint:
+- Fetches VODs for authenticated user from Twitch
+- Maps Twitch video data to Supabase schema
+- Upserts VODs to 'vods' table with user_id included
+- Uses onConflict: 'id' to prevent duplicates
+- Continues returning data even if upsert fails
+
+#### GET /channel/:login endpoint:
+- Fetches VODs for specified channel from Twitch
+- Maps and upserts VODs with user_id
+- Same upsert logic as /mine endpoint
+
+#### GET /:id endpoint:
+- Fetches single VOD details from Twitch
+- Upserts single VOD with extended data (includes muted_segments)
+- Returns detailed VOD information
+
+### 5. Data Transformation
+Each VOD is transformed to include:
+- id (PRIMARY KEY)
+- user_id (from Twitch channel owner)
+- title, description
+- duration (parsed to seconds), duration_formatted
+- thumbnail_url, url
+- view_count, created_at
+- stream_id, type
+- user_login, user_name
+- muted_segments (for detailed VOD endpoint)
+
+### 6. Created Integration Tests
+- Created server/src/routes/vods.integration.test.ts
+- Tests verify data structure for Supabase records
+- Tests verify duration parsing logic
+- Tests verify upsert configuration (onConflict: 'id')
+- Tests verify batch upsert for multiple VODs
+- All tests passing (4 pass, 0 fail)
+
+### 7. Documentation
+- Added expected Supabase table schema in test file comments
+- Documented required fields and indexes
+
+## Expected Supabase Schema
+
+```sql
+CREATE TABLE vods (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  duration INTEGER NOT NULL,
+  duration_formatted TEXT NOT NULL,
+  thumbnail_url TEXT NOT NULL,
+  url TEXT NOT NULL,
+  view_count INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL,
+  stream_id TEXT,
+  type TEXT NOT NULL,
+  user_login TEXT NOT NULL,
+  user_name TEXT NOT NULL,
+  muted_segments JSONB,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_vods_user_id ON vods(user_id);
+CREATE INDEX idx_vods_created_at ON vods(created_at DESC);
+```
+
+## Key Implementation Details
+
+1. **User ID Association**: Each VOD record includes user_id from the Twitch channel owner
+2. **Upsert Strategy**: Uses onConflict: 'id' to update existing records on duplicate
+3. **Error Handling**: Continues serving Twitch data even if Supabase upsert fails
+4. **Batch Operations**: Multiple VODs are upserted in a single database call
+5. **Data Consistency**: All three endpoints (/mine, /channel/:login, /:id) follow same upsert pattern
+
+## Files Modified
+- server/package.json (added dependency)
+- server/src/lib/env.ts (added Supabase env vars)
+- server/src/lib/supabase.ts (created)
+- server/src/routes/vods.ts (updated all endpoints)
+
+## Files Created
+- server/src/lib/supabase.ts
+- server/src/routes/vods.integration.test.ts
+
+## Next Steps
+- Create the vods table in Supabase with the schema above
+- Set up appropriate RLS policies for the vods table
+- Consider adding background sync for older VODs
