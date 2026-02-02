@@ -1,0 +1,45 @@
+## Task: Wire src/pages/Queue.tsx
+
+### Completed:
+
+1. **Created VodBrowserModal component** (src/components/queue/VodBrowserModal.tsx)
+   - Implemented modal with channel search functionality
+   - Integrated with api.vods.getByChannel to fetch VODs
+   - Displays VOD list with thumbnails, titles, durations, and view counts
+   - Allows users to select a VOD to add to processing queue
+   - Includes loading and error states
+   - Supports external links to original VODs
+
+2. **Wired Queue.tsx with useJobs hook**
+   - Replaced mockQueue array with useJobs hook from @/hooks/useJobs
+   - Added loading and error states for job fetching
+   - Jobs now display real data from the API
+   - Automatic polling enabled for active jobs (5-second interval)
+
+3. **Wired cancel/retry/delete actions**
+   - Cancel: Works for processing jobs (downloading, analyzing, extracting, reframing, captioning)
+   - Retry: Available for failed jobs to restart processing
+   - Delete: Available for all jobs with confirmation dialog
+   - All actions show loading spinner while executing
+   - Error handling with user-friendly error messages
+
+4. **Added VodBrowserModal to Add Stream button**
+   - Both "Add Stream" header button and empty state button open the modal
+   - Modal allows searching Twitch channels and browsing their VODs
+   - Selecting a VOD creates a new job via useJobs.createJob
+   - Job creation includes vodId, vodUrl, title, channelLogin, and duration
+
+### Technical Details:
+
+- Queue page now displays real job statuses with proper status badges
+- Progress bars show for processing jobs with percentage and clips found count
+- Different action buttons based on job status (cancel for processing, retry for failed)
+- Duration formatting helper converts seconds to HH:MM:SS format
+- Status display mapping for user-friendly status labels
+- Empty state prompts users to add their first stream
+- Loading state shows spinner while fetching initial jobs
+
+### Testing:
+
+No test framework is currently configured in the project (no vitest, jest, or testing-library).
+Skipped test creation as tests would require setting up testing infrastructure first.
