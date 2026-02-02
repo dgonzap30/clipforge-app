@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: clipforge-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - clipforge
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: clipforge-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8787}:8787"
+    environment:
+      # Supabase
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+
+      # Redis
+      - REDIS_URL=redis://redis:6379
+
+      # OpenAI
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
+      # Security
+      - JWT_SECRET=${JWT_SECRET:-change-this-in-production}
+
+      # App
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=8787
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - clipforge-temp:/tmp/clipforge
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - clipforge
+
+volumes:
+  redis-data:
+    driver: local
+  clipforge-temp:
+    driver: local
+
+networks:
+  clipforge:
+    driver: bridge
