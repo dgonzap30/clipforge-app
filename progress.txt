@@ -1,0 +1,29 @@
+# Agent 14 Progress
+
+## Completed Tasks
+
+### 1. Created src/pages/AuthCallback.tsx
+- Handles OAuth redirect callbacks for both cookie-based and Supabase Auth flows
+- Shows loading spinner during authentication processing
+- Displays error messages if authentication fails
+- Redirects to dashboard on success or connect page on failure
+
+### 2. Created src/components/auth/ProtectedRoute.tsx
+- Wrapper component that checks authentication status using useAuth hook
+- Shows loading spinner while checking auth status
+- Redirects unauthenticated users to /connect page
+- Renders children components for authenticated users
+
+### 3. Updated src/App.tsx
+- Added import for AuthCallback component
+- Added import for ProtectedRoute component
+- Added new route: /auth/callback for handling OAuth callbacks
+- Wrapped the Layout route (and all nested routes) with ProtectedRoute component
+- This protects all authenticated routes: /, /clips, /queue, /settings
+
+## Summary
+Successfully implemented authentication routing with protected routes. The app now:
+- Has a dedicated OAuth callback handler at /auth/callback
+- Protects all main application routes (dashboard, clips, queue, settings)
+- Redirects unauthenticated users to the connect page
+- Shows appropriate loading states during authentication checks
