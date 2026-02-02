@@ -11,6 +11,7 @@
 import { extractAudio, getAudioLevels, analyzeAudioLevels, AudioMoment } from '../../analysis/audio'
 import { fuseSignals, SignalMoment, ViewerClip } from '../../analysis/fusion'
 import { ChatMoment, fetchChatLogs, analyzeChatLogs } from '../../analysis/chat'
+import { analyzeVisualMoments, VisualMoment } from '../../analysis/visual'
 
 export interface AnalyzeStageInput {
   videoPath: string
@@ -21,6 +22,7 @@ export interface AnalyzeStageInput {
 
 export interface AnalyzeStageOutput {
   audioMoments: AudioMoment[]
+  visualMoments: VisualMoment[]
   fusedMoments: SignalMoment[]
   audioPath: string
 }
@@ -31,13 +33,17 @@ export interface AnalyzeStageConfig {
     chat: number
     audio: number
     clips: number
+    visual: number
   }
+  enableVisualAnalysis?: boolean
+  visualAnalysisFps?: number
 }
 
 const DEFAULT_WEIGHTS = {
-  chat: 0.4,
-  audio: 0.4,
+  chat: 0.3,
+  audio: 0.3,
   clips: 0.2,
+  visual: 0.2,
 }
 
 /**
@@ -81,16 +87,32 @@ export async function analyze(
   // Step 4: Analyze audio levels to find moments
   const audioMoments = analyzeAudioLevels(audioLevels)
 
-  // Step 5: Fuse signals with specified weights
+  // Step 5: Analyze visual moments (if enabled)
+  let visualMoments: VisualMoment[] = []
+  if (config.enableVisualAnalysis !== false) {
+    try {
+      console.log('[Analyze] Running visual scene analysis')
+      visualMoments = await analyzeVisualMoments(videoPath, {
+        fps: config.visualAnalysisFps ?? 1,
+        minScore: 30,
+      })
+    } catch (error) {
+      console.error('[Analyze] Visual analysis failed, continuing without visual signals:', error)
+    }
+  }
+
+  // Step 6: Fuse signals with specified weights
   const fusedMoments = fuseSignals(
     chatMoments,
     audioMoments,
     viewerClips,
+    visualMoments,
     { weights }
   )
 
   return {
     audioMoments,
+    visualMoments,
     fusedMoments,
     audioPath,
   }

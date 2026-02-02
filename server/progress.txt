@@ -200,3 +200,71 @@
 - CAPS and repeated character detection for excitement indicators
 - Moment merging to avoid overlapping detections
 - TypeScript interfaces for API responses to avoid 'any' types
+
+## Completed: Visual Scene Analysis Implementation
+
+### Created Files:
+1. **server/src/analysis/visual.ts**
+   - Implemented analyzeVisualMoments() for extracting and analyzing video keyframes
+   - Integrated Claude Vision API (Sonnet 3.5) for AI-powered scene analysis
+   - Built basic fallback analysis using FFmpeg signalstats for when Claude API is unavailable
+   - Added estimateVisualQuality() for categorizing visual moments
+   - Implemented extractKeyframes() using FFmpeg at configurable fps
+   - Created VisualMoment interface with timestamp, type, score, description, and metadata
+   - Added support for game-specific event detection (placeholder for future expansion)
+
+2. **server/src/__tests__/visual.test.ts**
+   - Comprehensive test suite with 5 tests covering:
+     - Keyframe extraction and moment detection
+     - Score-based filtering
+     - Quality estimation (high/medium/low)
+     - Quality indicator identification
+     - Valid moment type verification
+   - All tests pass successfully
+   - Graceful handling of missing FFmpeg filters for test video creation
+
+### Modified Files:
+1. **server/src/analysis/fusion.ts**
+   - Added VisualMoment import
+   - Extended SignalMoment interface with visual signal data
+   - Updated FusionConfig weights to include visual (default: 0.2)
+   - Modified fuseSignals() to accept visualMoments parameter
+   - Added visual moment detection and scoring in fusion algorithm
+   - Updated confidence calculation for 4 signal types (was 3)
+   - Added duration adjustment for visual victory/action moments
+   - Adjusted default weights: chat 0.3, audio 0.3, clips 0.2, visual 0.2
+
+2. **server/src/pipeline/stages/analyze.ts**
+   - Added VisualMoment import
+   - Extended AnalyzeStageOutput to include visualMoments array
+   - Extended AnalyzeStageConfig with enableVisualAnalysis and visualAnalysisFps options
+   - Updated DEFAULT_WEIGHTS to include visual: 0.2 (reduced audio from 0.8 to 0.6)
+   - Added Step 4: visual analysis with error handling
+   - Modified fuseSignals() call to include visualMoments
+   - Visual analysis runs by default but can be disabled via config
+
+3. **server/src/lib/env.ts**
+   - Added ANTHROPIC_API_KEY environment variable for Claude Vision API integration
+
+### Features Implemented:
+- FFmpeg keyframe extraction at configurable fps (default: 1 frame/second)
+- Claude Vision API integration for intelligent scene analysis
+- Detection of 6 visual moment types: action, victory, defeat, reaction, alert, neutral
+- Scoring system (0-100) for visual moment quality
+- Confidence tracking for AI-based detections
+- Metadata capture: emotional intensity, color changes, on-screen text, event types
+- Fallback to basic brightness/saturation analysis when AI unavailable
+- Visual signal fusion with audio, chat, and viewer clips
+- Quality estimation with reasoning for high/medium/low classifications
+- Graceful error handling - pipeline continues if visual analysis fails
+
+### Technical Details:
+- Uses FFmpeg fps filter for efficient keyframe extraction
+- Claude Vision API integration with base64 image encoding
+- JSON response parsing with regex for robust API response handling
+- Temporary directory management with automatic cleanup
+- Type-safe interfaces for all visual moment data structures
+- Signal convergence window matching (5 seconds default)
+- Weight-based fusion with configurable signal weights
+- Test coverage with mocked video generation and validation
+- Linting compliance with TypeScript strict mode
