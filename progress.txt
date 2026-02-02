@@ -1,0 +1,8 @@
+Created server/src/lib/supabase.ts with service_role Supabase client:
+- Added @supabase/supabase-js dependency to server/package.json
+- Updated server/src/lib/env.ts to include SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables
+- Created server/src/lib/supabase.ts with a Supabase client configured with service role key
+- The client has auth.autoRefreshToken and auth.persistSession disabled for server-side use
+- Created comprehensive tests in server/src/lib/supabase.test.ts
+- Tests skip when environment variables are not configured (for development)
+- All tests pass
