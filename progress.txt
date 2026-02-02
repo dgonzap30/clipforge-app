@@ -1,0 +1,36 @@
+# Task: Create server/src/queue/connection.ts
+
+## Implementation Completed
+
+Created Redis connection factory for BullMQ with the following features:
+
+### Files Created:
+1. **server/src/queue/connection.ts**
+   - `createRedisConnection()`: Factory function that creates a Redis connection for BullMQ
+   - `redisConnection`: Singleton connection instance for reuse across queues
+   - Parses `env.REDIS_URL` to extract connection details (host, port, username, password, database)
+   - Configures BullMQ-specific options:
+     - `maxRetriesPerRequest: null` (required for BullMQ)
+     - `enableReadyCheck: false` (BullMQ recommendation)
+   - Implements retry strategy with exponential backoff (max 3 seconds)
+   - Adds connection event logging in development mode (connect, error, ready)
+
+2. **server/src/queue/connection.test.ts**
+   - Comprehensive test suite with 6 passing tests:
+     - Verifies IORedis instance creation
+     - Validates BullMQ-required options
+     - Confirms REDIS_URL parsing
+     - Tests retry strategy with exponential backoff
+     - Validates singleton connection export
+     - Tests default configuration
+
+### Technical Details:
+- Uses `ioredis` package (already installed)
+- Compatible with BullMQ requirements
+- Supports Redis URLs with authentication and database selection
+- Implements proper error handling and retry logic
+- All tests passing (6/6)
+
+### Dependencies Used:
+- ioredis@5.9.2
+- bullmq@5.67.2 (for TypeScript types)
