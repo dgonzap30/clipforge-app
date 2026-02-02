@@ -1,16 +1,39 @@
-## Task: Update server/src/lib/env.ts
+## Task: Add filler word removal
 
 ### Changes Made:
-- Replaced S3-related environment variables with Supabase and OpenAI variables
-- Removed: S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION
-- Added: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, OPENAI_API_KEY
-- Maintained the same structure and format of the env configuration
-- The validateEnv() function remains unchanged (validation requirements will need to be updated in a separate task if needed)
+- Implemented filler word removal functionality in the transcription module
+- Added `removeFillers` and `customFillerWords` configuration options to `TranscribeConfig` interface
+- Created `removeFillerWords()` function that processes transcription results to remove common filler words
+- Integrated filler removal into both `transcribeWithWhisperAPI()` and `transcribeWithLocalWhisper()` functions
+- Implemented smart removal logic that:
+  - Removes default filler words: um, uh, umm, uhh, like, you know, i mean, sort of, kind of, basically, actually, literally
+  - Preserves filler words after sentence-ending punctuation (., !, ?)
+  - Preserves filler words with high confidence (>= 0.95) indicating emphasis
+  - Adjusts timestamps to close gaps < 1 second
+  - Preserves natural pauses > 1 second
+  - Supports custom filler word lists
+- Created comprehensive test suite with 14 test cases covering all edge cases
 
 ### Files Modified:
-- server/src/lib/env.ts
+- server/src/captions/transcribe.ts (added removeFillerWords function and updated TranscribeConfig)
+- server/src/captions/transcribe.test.ts (new file with comprehensive tests)
+
+### Test Results:
+- All 14 tests passing
+- Test coverage includes:
+  - Default filler word removal
+  - Timestamp adjustment
+  - Natural pause preservation
+  - Sentence-start word preservation
+  - Emphasis detection
+  - Custom filler words
+  - Multiple segments handling
+  - Empty segment removal
+  - Case-insensitive matching
+  - Multi-word phrases
 
 ### Notes:
-- The env object now exports Supabase credentials instead of S3-compatible storage credentials
-- OpenAI API key has been added for AI functionality
-- Default values remain empty strings to maintain consistency with other configuration
+- Feature is opt-in via `removeFillers: true` config flag
+- Default behavior unchanged when flag is not set
+- No new linting errors introduced
+- Implementation follows PRD requirements exactly
