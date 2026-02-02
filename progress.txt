@@ -1,0 +1,25 @@
+## ProtectedRoute Component Implementation
+
+### What was implemented:
+- Created `src/components/auth/ProtectedRoute.tsx` with the following features:
+  - Uses `useAuth` hook to check authentication status
+  - Redirects unauthenticated users to `/connect` page
+  - Shows loading spinner while checking authentication
+  - Renders children (protected content) only when authenticated
+  - Uses React Router's `navigate` with `replace: true` to prevent back button issues
+
+### Implementation details:
+- **Authentication check**: Leverages existing `useAuth` hook from `src/hooks/useAuth.ts`
+- **Backend integration**: Works with existing Twitch OAuth backend (not Supabase Auth)
+- **Loading state**: Displays a centered loading spinner with "Checking authentication..." message
+- **Redirect behavior**: Uses `useEffect` to redirect when auth state changes
+- **Styling**: Matches existing app design system (forge colors, dark theme)
+
+### Testing:
+- No test framework is currently set up in the project (no vitest/jest configuration found)
+- Tests would require setting up vitest + @testing-library/react + react-router mocks
+- Component is ready for manual testing once integrated into routing
+
+### Next steps:
+- Component is ready to be used in `src/App.tsx` to wrap protected routes
+- Works with existing authentication infrastructure (Twitch OAuth via backend API)
