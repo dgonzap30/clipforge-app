@@ -5,6 +5,7 @@ import { Clips } from '@/pages/Clips'
 import { Queue } from '@/pages/Queue'
 import { Settings } from '@/pages/Settings'
 import { Connect } from '@/pages/Connect'
+import { AuthCallback } from '@/pages/AuthCallback'
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="/connect" element={<Connect />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
     </Routes>
   )
 }
