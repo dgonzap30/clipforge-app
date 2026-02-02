@@ -1,0 +1,106 @@
+# Rewrite server/src/routes/clips.ts - COMPLETED
+
+## Changes Made:
+
+### 1. Package Dependencies (server/package.json)
+- Added @supabase/supabase-js@^2.39.0
+- Removed @aws-sdk/client-s3 and @aws-sdk/s3-request-presigner (replaced by Supabase Storage)
+
+### 2. Environment Configuration (server/src/lib/env.ts)
+- Added SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
+- Added OPENAI_API_KEY
+- Removed S3-related environment variables
+- Updated validateEnv() to require Supabase variables in production
+
+### 3. Supabase Client (server/src/lib/supabase.ts) - NEW FILE
+- Created Supabase client using service role key
+- Added TypeScript type definitions for database tables (clips, jobs, vods)
+- Client bypasses RLS for server-side operations
+
+### 4. Storage Utilities (server/src/lib/storage.ts) - NEW FILE
+- getSignedUrl(): Generates signed URLs for files in Supabase Storage
+- uploadFile(): Uploads files to Supabase Storage buckets
+- downloadFile(): Downloads files from Supabase Storage
+- deleteFile(): Deletes files from storage
+- Convenience exports for 'clipforge-clips' and 'clipforge-temp' buckets
+
+### 5. Authentication Middleware (server/src/middleware/auth.ts) - NEW FILE
+- requireAuth middleware extracts and validates JWT from Authorization Bearer header
+- Uses supabase.auth.getUser() to verify token
+- Sets user_id in Hono context for route handlers
+- Returns 401 for missing/invalid tokens
+
+### 6. Clips Routes (server/src/routes/clips.ts) - REWRITTEN
+Replaced in-memory Map with Supabase database queries:
+
+#### All Routes:
+- Applied requireAuth middleware to all routes
+- All queries scoped by user_id from auth context
+
+#### Helper Function:
+- addSignedUrls(): Generates signed URLs for video_path and thumbnail_path
+- Transforms snake_case DB fields to camelCase API response
+
+#### GET /clips:
+- Queries supabase.from('clips') with user_id filter
+- Supports status filter, pagination (limit/offset)
+- Orders by created_at descending
+- Returns clips with signed URLs for video and thumbnail
+
+#### GET /clips/:id:
+- Fetches single clip by id and user_id
+- Returns 404 if not found or unauthorized
+- Includes signed URLs in response
+
+#### POST /clips:
+- Creates new clip record in Supabase
+- Generates nanoid for clip ID
+- Calculates duration from startTime/endTime
+- Returns created clip with signed URLs
+
+#### PATCH /clips/:id:
+- Updates clip by id, scoped to user_id
+- Verifies ownership before update
+- Maps camelCase input to snake_case DB fields
+- Returns updated clip with signed URLs
+
+#### DELETE /clips/:id:
+- Deletes clip from database
+- Also deletes associated video and thumbnail files from storage
+- Returns 404 if not found or unauthorized
+
+#### POST /clips/bulk/delete:
+- Deletes multiple clips by IDs
+- Scoped to user_id
+- Deletes associated storage files
+- Returns count of deleted clips
+
+#### POST /clips/bulk/export:
+- Marks clips as exported to specified platform
+- Only exports clips with status='ready'
+- Updates exported_to array and sets status='exported'
+- Returns list of exported clip IDs
+
+### 7. Tests (server/src/routes/clips.test.ts) - NEW FILE
+- Created comprehensive test suite using Bun test framework
+- Tests for authentication (401 for missing/invalid tokens)
+- Tests for all CRUD operations (GET, POST, PATCH, DELETE)
+- Tests for bulk operations (delete, export)
+- Tests for validation (invalid data, invalid platforms)
+- Mocked Supabase client and storage modules
+
+## Key Features Implemented:
+✅ Replaced in-memory Map with Supabase Postgres database
+✅ All queries scoped by user_id from JWT authentication
+✅ Signed URL generation for video_path and thumbnail_path
+✅ Auth middleware using Supabase JWT verification
+✅ Storage helpers for Supabase Storage operations
+✅ Comprehensive error handling and logging
+✅ Database and storage cleanup on clip deletion
+✅ Test coverage for all endpoints
+
+## API Compatibility:
+- Maintained same API shape as original implementation
+- All existing routes and query parameters supported
+- Response format unchanged (camelCase fields)
+- Backward compatible with frontend clients
