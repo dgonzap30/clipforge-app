@@ -1,0 +1,109 @@
+## Progress: Upload Stage Implementation
+
+### Completed:
+
+1. **Updated server/src/lib/env.ts**
+   - Replaced S3 environment variables with Supabase variables
+   - Added SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
+   - Added OPENAI_API_KEY for future Whisper integration
+   - Updated validateEnv() to require Supabase credentials in production
+
+2. **Created server/src/lib/supabase.ts**
+   - Implemented Supabase client with service role key for admin operations
+   - Added createUserClient() function for user-scoped operations
+   - Configured client with auto-refresh disabled for server-side usage
+
+3. **Created server/src/lib/storage.ts**
+   - Comprehensive Supabase Storage helper functions
+   - uploadFile() - Upload files to Storage with options
+   - downloadFile() - Download files from Storage
+   - getSignedUrl() - Generate signed URLs for private access
+   - getPublicUrl() - Get public URLs for public buckets
+   - deleteFile() / deleteFiles() - Delete one or multiple files
+   - listFiles() - List files in a bucket path
+   - copyFile() / moveFile() - Copy/move files within Storage
+   - fileExists() - Check if file exists
+   - Defined BUCKETS constant for clipforge-clips and clipforge-temp
+
+4. **Created server/src/pipeline/types.ts**
+   - Defined PipelineContext interface with comprehensive fields
+   - Job info (jobId, userId)
+   - Input data (vodId, vodUrl, vodTitle)
+   - Processing settings (clipCount, duration limits, aspect ratio, quality, captions, face tracking)
+   - Intermediate outputs for all pipeline stages
+   - PipelineStage interface with execute and cleanup methods
+   - PipelineResult and StageProgress interfaces
+
+5. **Created server/src/pipeline/stages/upload.ts** (Main Task)
+   - Implemented uploadStage() function that:
+     - Uploads video files to Supabase Storage clipforge-clips bucket
+     - Uploads thumbnail files to Storage
+     - Generates storage paths with user_id/job_id organization
+     - Creates signed URLs for file access
+     - Updates clip records in Supabase database with storage paths
+     - Handles progress tracking and error logging
+     - Continues processing even if individual clips fail
+   - Helper functions:
+     - findThumbnailPath() - Locate thumbnail for video
+     - extractClipTitle() - Generate clip titles
+     - calculateDuration() - Get clip duration from metadata
+     - getClipHydeScore() - Extract HYDE score for clip
+   - createUploadStage() factory function
+   - Configurable options (generatePublicUrls, signedUrlExpiry)
+
+6. **Created server/src/pipeline/stages/__tests__/upload.test.ts**
+   - Unit tests for upload stage creation
+   - Tests for validation of required clips data
+   - Tests for stage structure and cleanup
+   - Integration tests for handling multiple clips
+   - Tests for prioritizing captioned clips over extracted clips
+
+7. **Updated package.json**
+   - Added @supabase/supabase-js dependency
+   - Removed AWS SDK dependencies (@aws-sdk/client-s3, @aws-sdk/s3-request-presigner)
+
+### Implementation Details:
+
+The upload stage is designed to be the final stage in the ClipForge pipeline. It:
+
+1. **Accepts clips from previous stages** in priority order:
+   - captionedClips (if captions were added)
+   - reframedClips (if reframing was applied)
+   - extractedClips (base clips)
+
+2. **Uploads to Supabase Storage**:
+   - Bucket: clipforge-clips
+   - Path structure: {userId}/{jobId}/{clipId}_{timestamp}.mp4
+   - Includes video files and thumbnails
+   - Sets appropriate content types and cache headers
+
+3. **Updates Supabase Database**:
+   - Upserts clip records with storage paths
+   - Sets status to 'ready'
+   - Includes metadata: duration, HYDE score, title
+   - Links to job and VOD
+
+4. **Error Handling**:
+   - Continues processing if individual clips fail
+   - Logs errors for debugging
+   - Only throws if all clips fail
+
+5. **Progress Tracking**:
+   - Updates context.progress during upload
+   - Sets context.currentStage = 'upload'
+   - Reports progress for monitoring
+
+### Next Steps:
+
+The upload stage integrates with the pipeline orchestrator (to be implemented) and can be used as follows:
+
+```typescript
+import { createUploadStage } from './stages/upload'
+
+const uploadStage = createUploadStage({
+  signedUrlExpiry: 86400, // 24 hours
+})
+
+const result = await uploadStage.execute(context)
+console.log(`Uploaded ${result.uploadedClips.length} clips`)
+```
