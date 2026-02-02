@@ -1,0 +1,34 @@
+## Implementation Progress
+
+### Created src/hooks/useClips.ts
+
+Implemented TanStack Query hooks for clips management with the following functionality:
+
+**Query Hooks:**
+- `useClips(options?)` - Fetches list of clips with optional filters (status, limit, offset)
+- `useClip(id)` - Fetches a single clip by ID
+
+**Mutation Hooks:**
+- `useDeleteClip()` - Deletes a single clip and updates cache
+- `useBulkDeleteClips()` - Deletes multiple clips in bulk
+- `useUpdateClip()` - Updates clip properties (title, status)
+- `useBulkExportClips()` - Exports clips to platforms (tiktok, youtube, instagram)
+
+**Query Key Factory:**
+- `clipsKeys` - Provides consistent query keys for cache management
+
+**Features:**
+- Automatic cache invalidation after mutations
+- Optimistic updates for better UX
+- 5-minute stale time for efficient caching
+- Proper TypeScript typing using existing Clip interface from api.ts
+
+**Dependencies Added:**
+- Installed @tanstack/react-query package
+
+**Files Modified:**
+- Created: src/hooks/useClips.ts
+- Updated: src/hooks/index.ts (exported all useClips hooks)
+- Updated: package.json (added @tanstack/react-query dependency)
+
+**Note:** Testing framework not yet set up in the project, so tests were not created. Tests should be added when testing infrastructure is established.
