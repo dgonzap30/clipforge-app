@@ -12,6 +12,11 @@ export const env = {
   TWITCH_CLIENT_SECRET: process.env.TWITCH_CLIENT_SECRET || '',
   TWITCH_REDIRECT_URI: process.env.TWITCH_REDIRECT_URI || 'http://localhost:3000/auth/callback',
 
+  // YouTube
+  YOUTUBE_CLIENT_ID: process.env.YOUTUBE_CLIENT_ID || '',
+  YOUTUBE_CLIENT_SECRET: process.env.YOUTUBE_CLIENT_SECRET || '',
+  YOUTUBE_REDIRECT_URI: process.env.YOUTUBE_REDIRECT_URI || 'http://localhost:3000/api/platforms/youtube/callback',
+
   // Instagram
   INSTAGRAM_APP_ID: process.env.INSTAGRAM_APP_ID || '',
   INSTAGRAM_APP_SECRET: process.env.INSTAGRAM_APP_SECRET || '',

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 ## Task: Add hook detection and clip boundary optimization
 
 ### Implementation Summary:
@@ -864,54 +863,6 @@ Environment variables needed:
 - Border style 3 creates a glow effect for neon-glow preset
 - Hormozi preset uses ALL CAPS transformation for emphasis
 - Each preset maintains readability on mobile devices per PRD requirements
-=======
-## Task: Add contextual emoji insertion
-
-### Changes Made:
-- Implemented emoji keyword mapping system with 70+ gaming/streaming keywords (fire 🔥, crazy 😱, lol 😂, gg 🎮, etc.)
-- Added laughter detection for automatic emoji insertion on words like "haha", "lmao", etc.
-- Added support for multi-word emoji phrases ("no way" → 😲, "lets go" → 🚀)
-- Extended generateTikTokASS() function in transcribe.ts to insert emojis as separate dialogue lines
-- Implemented emoji positioning logic with X/Y coordinate calculation
-- Added optional emoji scale animation (120% scale-up on insertion, settle to 100%)
-- Created Emoji style in ASS format with larger font size (1.25x base font size)
-- Added emojis and emojiAnimation configuration options to CaptionConfig interface
-- Updated frontend Settings store to include enableEmojis boolean setting (default: true)
-- Added "Enable Emojis" toggle to Settings UI page with description
-- Wrote comprehensive unit tests for emoji insertion functionality (15 test cases)
-- All tests passing with 100% coverage of emoji features
-
-### Files Modified:
-- server/src/captions/transcribe.ts (added emoji mapping, detection, and insertion logic)
-- server/src/pipeline/stages/caption.ts (added emojis config to CaptionConfig interface)
-- server/src/captions/emoji.test.ts (new file with comprehensive tests)
-- server/src/pipeline/stages/caption.test.ts (added emoji configuration tests)
-- src/store/index.ts (added enableEmojis to Settings interface)
-- src/pages/Settings.tsx (added emoji toggle checkbox in Output Settings section)
-
-### Features Implemented:
-1. **Keyword-to-Emoji Mapping**: 70+ common gaming/streaming keywords mapped to contextual emojis
-2. **Laughter Detection**: Automatic detection of laughter patterns with 😂 emoji insertion
-3. **Multi-Word Phrases**: Support for phrases like "no way", "lets go" with appropriate emojis
-4. **ASS Subtitle Integration**: Emojis rendered as separate dialogue lines with pixel-perfect positioning
-5. **Animation Support**: Optional scale-up animation for emoji entrance
-6. **Configuration Toggle**: Frontend UI toggle to enable/disable emoji insertion
-7. **Case-Insensitive Matching**: Emojis match regardless of text case (FIRE, fire, Fire all work)
-
-### Technical Details:
-- Emojis are inserted on Layer 1 (above text on Layer 0) to prevent overlap
-- Position calculated based on character width estimation and word placement
-- Emoji style uses larger font size for visibility
-- Animation uses ASS \t() tags for smooth scaling transitions
-- Configuration defaults: emojis off by default, animation on when emojis enabled
-- All emoji dialogue lines use absolute positioning to avoid text overlap
-
-### Test Coverage:
-- 15 unit tests covering all emoji features
-- Tests for single-word keywords, multi-word phrases, laughter detection
-- Tests for case-insensitive matching, animation, positioning
-- Tests for disabled state, multiple emojis per segment
-- Integration tests for configuration passing through pipeline
 
 ---
 
@@ -969,4 +920,62 @@ Environment variables needed:
 - Emojis only appear when word-level timing is available from Whisper
 - Position calculation uses approximate character width (font size * 0.6)
 - Compatible with all caption positions (top, center, bottom)
->>>>>>> ralphy/agent-8-1770070400644-8x191j-add-contextual-emoji-insertion
+
+---
+
+## Task: Implement YouTube Data API v3 integration
+
+### Changes Made:
+- Created YouTube API client with OAuth 2.0 flow and video upload functionality
+- Added platform connections routes for OAuth authentication and token management
+- Updated clips bulk export endpoint to support YouTube video uploads
+- Created database migration for platform_connections table
+- Added comprehensive tests for YouTube integration
+
+### Files Created:
+- server/src/lib/youtube.ts - YouTube API client with OAuth and upload methods
+- server/src/routes/platforms.ts - Platform connection routes with OAuth flow
+- server/migrations/002_create_platform_connections_table.sql - Database schema
+- server/src/lib/__tests__/youtube.test.ts - YouTube API tests (10 tests passing)
+- server/src/routes/__tests__/platforms.test.ts - Platform routes tests
+
+### Files Modified:
+- server/src/lib/env.ts - Added YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REDIRECT_URI
+- server/src/routes/clips.ts - Updated bulk export endpoint to upload to YouTube
+- server/src/index.ts - Mounted platforms routes at /api/platforms
+
+### Features Implemented:
+1. OAuth 2.0 flow with Google for YouTube access
+2. Token refresh mechanism for long-lived connections
+3. Video upload to YouTube with metadata (title, description, tags, privacy status)
+4. Automatic #Shorts tag for YouTube Shorts
+5. Gaming category (ID: 20) set by default
+6. Quota error handling (10,000 units/day limit, 1,600 per upload)
+7. Platform connection management (connect, disconnect, list)
+8. Secure token storage in database with RLS policies
+
+### API Endpoints:
+- GET /api/platforms/connections - List connected platforms
+- GET /api/platforms/youtube/connect - Initiate OAuth flow
+- GET /api/platforms/youtube/callback - Handle OAuth callback
+- DELETE /api/platforms/:platform/disconnect - Revoke platform connection
+- POST /api/clips/bulk/export - Export clips to platforms (YouTube implemented)
+
+### Database Schema:
+- platform_connections table with columns:
+  - id, user_id, platform, access_token, refresh_token
+  - token_expires_at, username, platform_user_id, metadata
+  - connected_at, updated_at
+  - Unique constraint on (user_id, platform)
+  - RLS enabled for user isolation
+
+### Testing:
+- YouTube API tests: 10 tests passing
+- All new code passes linting (no new errors)
+- Integration tests validate OAuth URL generation, client methods, and error handling
+
+### Notes:
+- TikTok and Instagram upload not yet implemented (marked as TODO)
+- Refresh token logic handles expired tokens automatically
+- OAuth popup window pattern implemented for frontend integration
+- Video files are temporarily downloaded for upload, then cleaned up

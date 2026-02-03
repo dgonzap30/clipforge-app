@@ -7,6 +7,8 @@ import { requireAuth, type AuthContext } from '../middleware/auth'
 import { InstagramClient } from '../lib/instagram'
 import { TikTokClient } from '../lib/tiktok'
 import { refreshTikTokToken } from './platforms'
+import { getPlatformTokens } from './platforms'
+import { YouTubeClient } from '../lib/youtube'
 
 export const clipsRoutes = new Hono<AuthContext>()
 
@@ -394,9 +396,15 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
   platform: z.enum(['tiktok', 'youtube', 'instagram']),
   caption: z.string().optional(),
   shareToFeed: z.boolean().optional(),
+  metadata: z.object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    privacyStatus: z.enum(['public', 'private', 'unlisted']).optional(),
+  }).optional(),
 })), async (c) => {
   const user_id = c.get('user_id')
-  const { ids, platform, caption, shareToFeed } = c.req.valid('json')
+  const { ids, platform, caption, shareToFeed, metadata } = c.req.valid('json')
 
   try {
     // Fetch clips that are ready for export with their video paths
@@ -412,11 +420,15 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
       return c.json({ error: 'Failed to fetch clips' }, 500)
     }
 
+    if (!clips || clips.length === 0) {
+      return c.json({ error: 'No clips found ready for export' }, 404)
+    }
+
     const exported: string[] = []
     const errors: Array<{ clipId: string; error: string }> = []
 
     // Process each clip
-    for (const clip of clips || []) {
+    for (const clip of clips) {
       const exportedTo = clip.exported_to || []
 
       // Skip if already exported to this platform
@@ -425,8 +437,73 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
       }
 
       try {
-        // Handle Instagram export
-        if (platform === 'instagram') {
+        // Handle YouTube export
+        if (platform === 'youtube') {
+          // Get platform tokens
+          const tokens = await getPlatformTokens(user_id, platform)
+
+          if (!tokens) {
+            errors.push({ clipId: clip.id, error: 'YouTube not connected or token expired' })
+            continue
+          }
+
+          // Download clip file to temporary location for upload
+          if (!clip.video_path) {
+            errors.push({ clipId: clip.id, error: 'No video file found' })
+            continue
+          }
+
+          const signedUrl = await clipsStorage.getSignedUrl(clip.video_path)
+          if (!signedUrl) {
+            errors.push({ clipId: clip.id, error: 'Failed to get video URL' })
+            continue
+          }
+
+          // Download file to temp location
+          const response = await fetch(signedUrl)
+          if (!response.ok) {
+            errors.push({ clipId: clip.id, error: 'Failed to download video' })
+            continue
+          }
+
+          const videoBuffer = await response.arrayBuffer()
+          const tempPath = `/tmp/${clip.id}.mp4`
+          await Bun.write(tempPath, videoBuffer)
+
+          // Upload to YouTube
+          const youtubeClient = new YouTubeClient(tokens.accessToken)
+
+          await youtubeClient.uploadVideo(tempPath, {
+            title: metadata?.title || clip.title,
+            description: metadata?.description || `Clip from ${clip.title}`,
+            tags: metadata?.tags || ['#Shorts'],
+            categoryId: '20', // Gaming
+            privacyStatus: metadata?.privacyStatus || 'public',
+          })
+
+          // Clean up temp file
+          await Bun.write(tempPath, '')
+
+          // Update clip with export status
+          exportedTo.push(platform)
+
+          const { error: updateError } = await supabase
+            .from('clips')
+            .update({
+              status: 'exported',
+              exported_to: exportedTo,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', clip.id)
+            .eq('user_id', user_id)
+
+          if (!updateError) {
+            exported.push(clip.id)
+          } else {
+            console.error('Error updating clip export status:', updateError)
+            errors.push({ clipId: clip.id, error: 'Failed to update clip status' })
+          }
+        } else if (platform === 'instagram') {
           // Get user's Instagram connection
           const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id)
 
@@ -568,9 +645,6 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
               console.error('Error deleting temporary file:', unlinkError)
             }
           }
-        } else {
-          // YouTube not implemented yet
-          errors.push({ clipId: clip.id, error: `${platform} export not implemented yet` })
         }
       } catch (clipError) {
         console.error(`Error exporting clip ${clip.id} to ${platform}:`, clipError)
@@ -581,10 +655,10 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
       }
     }
 
-
     return c.json({
       exported,
       errors: errors.length > 0 ? errors : undefined,
+      message: `Successfully exported ${exported.length} clips to ${platform}`
     })
   } catch (error: Error | unknown) {
     console.error('Unexpected error bulk exporting clips:', error)

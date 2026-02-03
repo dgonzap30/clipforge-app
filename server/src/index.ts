@@ -8,7 +8,7 @@ import { authRoutes } from './routes/auth'
 import { vodsRoutes } from './routes/vods'
 import { clipsRoutes } from './routes/clips'
 import { jobsRoutes } from './routes/jobs'
-import platformsRoutes from './routes/platforms'
+import { platformsRoutes } from './routes/platforms'
 import { vodWorker as _vodWorker, closeWorker } from './queue/worker'
 import { redisConnection } from './queue/connection'
 

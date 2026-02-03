@@ -6,8 +6,28 @@ import { requireAuth, type AuthContext } from '../middleware/auth'
 import * as instagram from '../lib/instagram'
 import * as tiktok from '../lib/tiktok'
 import { TikTokClient } from '../lib/tiktok'
+import {
+  getAuthorizationUrl as getYouTubeAuthUrl,
+  exchangeCodeForTokens as exchangeYouTubeTokens,
+  refreshAccessToken as refreshYouTubeToken,
+  YouTubeClient,
+} from '../lib/youtube'
+import { nanoid } from 'nanoid'
 
-const platformsRoutes = new Hono<AuthContext>()
+export const platformsRoutes = new Hono<AuthContext>()
+
+// OAuth state storage (in production, use Redis or database)
+const oauthStates = new Map<string, { userId: string; timestamp: number }>()
+
+// Cleanup old states every 10 minutes
+setInterval(() => {
+  const now = Date.now()
+  for (const [state, data] of oauthStates.entries()) {
+    if (now - data.timestamp > 10 * 60 * 1000) { // 10 minutes
+      oauthStates.delete(state)
+    }
+  }
+}, 10 * 60 * 1000)
 
 // Apply auth middleware to all routes except OAuth callbacks
 platformsRoutes.use('*', async (c, next) => {
@@ -23,22 +43,33 @@ platformsRoutes.get('/connections', async (c) => {
   const user_id = c.get('user_id')
 
   try {
-    // Get TikTok connection from platform_connections table
-    const { data: tiktokConnection, error: tiktokError } = await supabase
+    // Get platform connections from table (TikTok, YouTube)
+    const { data: platformConnections, error: platformError } = await supabase
       .from('platform_connections')
-      .select('id, platform, account_metadata, created_at, updated_at')
+      .select('*')
       .eq('user_id', user_id)
-      .eq('platform', 'tiktok')
-      .single()
 
     // Get Instagram connection from user metadata
     const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id)
-
     const instagramData = (!userError && user) ? user.user.user_metadata?.instagram : null
 
+    // Find specific platform connections
+    const tiktokConn = platformConnections?.find(c => c.platform === 'tiktok')
+    const youtubeConn = platformConnections?.find(c => c.platform === 'youtube')
+
     const connections = {
-      tiktok: tiktokConnection || null,
-      youtube: null,
+      tiktok: tiktokConn ? {
+        id: tiktokConn.id,
+        platform: tiktokConn.platform,
+        username: tiktokConn.username || tiktokConn.account_metadata?.display_name,
+        connected_at: tiktokConn.connected_at || tiktokConn.created_at,
+      } : null,
+      youtube: youtubeConn ? {
+        id: youtubeConn.id,
+        platform: youtubeConn.platform,
+        username: youtubeConn.username,
+        connected_at: youtubeConn.connected_at,
+      } : null,
       instagram: instagramData ? {
         connected: true,
         igUserId: instagramData.ig_user_id,
@@ -56,6 +87,113 @@ platformsRoutes.get('/connections', async (c) => {
     return c.json({ error: 'Internal server error' }, 500)
   }
 })
+
+// ============================================================================
+// YouTube OAuth Routes
+// ============================================================================
+
+// YouTube OAuth connect
+platformsRoutes.get('/youtube/connect', async (c) => {
+  try {
+    const user_id = c.get('user_id')
+
+    // Generate state for CSRF protection
+    const state = nanoid()
+    oauthStates.set(state, { userId: user_id, timestamp: Date.now() })
+
+    const authUrl = getYouTubeAuthUrl(state)
+
+    return c.json({ url: authUrl })
+  } catch (error) {
+    console.error('Error initiating YouTube OAuth:', error)
+    return c.json({ error: 'Failed to initiate OAuth' }, 500)
+  }
+})
+
+// YouTube OAuth callback
+platformsRoutes.get('/youtube/callback', async (c) => {
+  try {
+    const code = c.req.query('code')
+    const state = c.req.query('state')
+    const error = c.req.query('error')
+
+    if (error) {
+      return c.json({ error: `OAuth error: ${error}` }, 400)
+    }
+
+    if (!code || !state) {
+      return c.json({ error: 'Missing code or state' }, 400)
+    }
+
+    // Verify state
+    const stateData = oauthStates.get(state)
+    if (!stateData) {
+      return c.json({ error: 'Invalid or expired state' }, 400)
+    }
+
+    oauthStates.delete(state)
+    const user_id = stateData.userId
+
+    // Exchange code for tokens
+    const tokens = await exchangeYouTubeTokens(code)
+
+    // Get channel info
+    const youtubeClient = new YouTubeClient(tokens.access_token)
+    const channelData = await youtubeClient.getChannel()
+    const channel = channelData.items?.[0]
+
+    if (!channel) {
+      return c.json({ error: 'Failed to fetch YouTube channel info' }, 500)
+    }
+
+    // Store connection in database
+    const { error: dbError } = await supabase
+      .from('platform_connections')
+      .upsert({
+        user_id,
+        platform: 'youtube',
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+        username: channel.snippet.title,
+        platform_user_id: channel.id,
+        metadata: {
+          customUrl: channel.snippet.customUrl,
+          thumbnailUrl: channel.snippet.thumbnails?.default?.url,
+        },
+        connected_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,platform',
+      })
+
+    if (dbError) {
+      console.error('Error storing YouTube connection:', dbError)
+      return c.json({ error: 'Failed to store connection' }, 500)
+    }
+
+    // Return success with postMessage to close popup
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>YouTube Connected</title></head>
+        <body>
+          <script>
+            window.opener.postMessage({ type: 'youtube-connected', success: true }, '*');
+            window.close();
+          </script>
+          <p>YouTube connected successfully! You can close this window.</p>
+        </body>
+      </html>
+    `)
+  } catch (error) {
+    console.error('Error in YouTube callback:', error)
+    return c.json({ error: 'OAuth callback failed' }, 500)
+  }
+})
+
+// ============================================================================
+// Instagram OAuth Routes
+// ============================================================================
 
 // Instagram OAuth - Initiate connection
 platformsRoutes.get('/instagram/connect', async (c) => {
@@ -320,6 +458,10 @@ platformsRoutes.post('/instagram/refresh-token', async (c) => {
   }
 })
 
+// ============================================================================
+// TikTok OAuth Routes
+// ============================================================================
+
 // TikTok OAuth - Initiate connection
 platformsRoutes.get('/tiktok/connect', async (c) => {
   const user_id = c.get('user_id')
@@ -369,12 +511,15 @@ platformsRoutes.get('/tiktok/callback', zValidator('query', z.object({
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         token_expires_at: expiresAt.toISOString(),
-        account_metadata: {
+        username: userInfo.display_name,
+        platform_user_id: userInfo.open_id,
+        metadata: {
           open_id: userInfo.open_id,
           union_id: userInfo.union_id,
           display_name: userInfo.display_name,
           avatar_url: userInfo.avatar_url,
         },
+        connected_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id,platform',
@@ -393,6 +538,10 @@ platformsRoutes.get('/tiktok/callback', zValidator('query', z.object({
     return c.json({ error: error instanceof Error ? error.message : 'OAuth callback failed' }, 500)
   }
 })
+
+// ============================================================================
+// Generic Platform Routes
+// ============================================================================
 
 // Disconnect platform
 platformsRoutes.post('/disconnect', zValidator('json', z.object({
@@ -488,4 +637,59 @@ export async function refreshTikTokToken(userId: string): Promise<string | null>
   }
 }
 
-export default platformsRoutes
+// Helper function to get and refresh tokens if needed
+export async function getPlatformTokens(userId: string, platform: string): Promise<{ accessToken: string; refreshToken: string | null } | null> {
+  const { data: connection, error } = await supabase
+    .from('platform_connections')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('platform', platform)
+    .single()
+
+  if (error || !connection) {
+    return null
+  }
+
+  // Check if token is expired
+  const expiresAt = new Date(connection.token_expires_at)
+  const now = new Date()
+
+  if (expiresAt <= now && connection.refresh_token) {
+    // Refresh token
+    try {
+      let newTokens
+
+      if (platform === 'youtube') {
+        newTokens = await refreshYouTubeToken(connection.refresh_token)
+      } else if (platform === 'tiktok') {
+        newTokens = await tiktok.refreshAccessToken(connection.refresh_token)
+      } else {
+        throw new Error(`Refresh not implemented for platform: ${platform}`)
+      }
+
+      // Update tokens in database
+      await supabase
+        .from('platform_connections')
+        .update({
+          access_token: newTokens.access_token,
+          refresh_token: newTokens.refresh_token || connection.refresh_token,
+          token_expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString(),
+        })
+        .eq('user_id', userId)
+        .eq('platform', platform)
+
+      return {
+        accessToken: newTokens.access_token,
+        refreshToken: newTokens.refresh_token || connection.refresh_token,
+      }
+    } catch (refreshError) {
+      console.error('Error refreshing token:', refreshError)
+      return null
+    }
+  }
+
+  return {
+    accessToken: connection.access_token,
+    refreshToken: connection.refresh_token,
+  }
+}
