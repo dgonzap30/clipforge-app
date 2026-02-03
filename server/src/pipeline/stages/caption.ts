@@ -42,6 +42,8 @@ export interface CaptionConfig {
     outlineWidth?: number
     borderStyle?: number
     textTransform?: 'uppercase' | 'lowercase' | 'none'
+    emojis?: boolean // Enable contextual emoji insertion
+    emojiAnimation?: boolean // Enable emoji scale animation
   }
 
   // Output settings

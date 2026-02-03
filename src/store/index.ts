@@ -16,6 +16,7 @@ export interface Settings {
     autoCaptions: boolean
     captionStyle: 'minimal' | 'bold' | 'tiktok'
     captionPreset: 'bold-pop' | 'clean-minimal' | 'hormozi' | 'neon-glow' | 'comic'
+    enableEmojis: boolean
   }
 }
 
@@ -54,6 +55,7 @@ const defaultSettings: Settings = {
     autoCaptions: true,
     captionStyle: 'tiktok',
     captionPreset: 'bold-pop',
+    enableEmojis: true,
   },
 }
 

@@ -359,6 +359,174 @@ function pad(num: number, length: number = 2): string {
 }
 
 /**
+ * Emoji keyword mapping
+ * Maps common gaming/streaming keywords to contextual emojis
+ */
+const EMOJI_MAP: Record<string, string> = {
+  'fire': '🔥',
+  'crazy': '😱',
+  'insane': '🤯',
+  'wow': '😮',
+  'lol': '😂',
+  'haha': '😂',
+  'dead': '💀',
+  'gg': '🎮',
+  'win': '🏆',
+  'lose': '😢',
+  'clutch': '⚡',
+  'no way': '😲',
+  'lets go': '🚀',
+  'poggers': '😎',
+  'omg': '😱',
+  'wtf': '❓',
+  'bruh': '💀',
+  'lmao': '😂',
+  'lmfao': '😂',
+  'laugh': '😂',
+  'laughing': '😂',
+  'pog': '😎',
+  'sheesh': '🔥',
+  'lit': '🔥',
+  'amazing': '🤩',
+  'nice': '👍',
+  'good': '👍',
+  'bad': '👎',
+  'awful': '👎',
+  'terrible': '👎',
+  'sick': '🔥',
+  'beast': '💪',
+  'destroyed': '💥',
+  'rekt': '💀',
+  'noob': '🤦',
+  'pro': '😎',
+  'god': '👑',
+  'king': '👑',
+  'queen': '👑',
+  'love': '❤️',
+  'heart': '❤️',
+  'pain': '😭',
+  'crying': '😭',
+  'cry': '😭',
+  'screaming': '😱',
+  'scream': '😱',
+  'yell': '📢',
+  'rage': '😤',
+  'angry': '😤',
+  'mad': '😤',
+  'happy': '😊',
+  'sad': '😢',
+  'think': '🤔',
+  'thinking': '🤔',
+  'confused': '😕',
+  'brain': '🧠',
+  'smart': '🧠',
+  'money': '💰',
+  'cash': '💰',
+  'rich': '💰',
+  'broke': '😭',
+  'stonks': '📈',
+  'cracked': '⚡',
+  'goat': '🐐',
+  'boss': '👑',
+  'legend': '⭐',
+  'legendary': '⭐',
+  'epic': '🎮',
+  'fail': '😬',
+  'oops': '😬',
+  'oof': '😬',
+  'yikes': '😬',
+  'ez': '😎',
+  'easy': '😎',
+  'hard': '😰',
+  'difficult': '😰',
+  'impossible': '🚫',
+  'possible': '✅',
+  'yes': '✅',
+  'yeah': '✅',
+  'yep': '✅',
+  'nope': '❌',
+  'never': '❌',
+  'always': '💯',
+  'perfect': '💯',
+  'flawless': '💯',
+  'victory': '🏆',
+  'defeat': '😭',
+}
+
+/**
+ * Detects if text contains laughter indicators
+ */
+function detectLaughter(text: string): boolean {
+  const lowerText = text.toLowerCase()
+  const laughterPatterns = [
+    '[laughter]',
+    '[laughing]',
+    '[laughs]',
+    'hahaha',
+    'hehehe',
+    'ahahaha',
+  ]
+  return laughterPatterns.some(pattern => lowerText.includes(pattern))
+}
+
+/**
+ * Find emoji matches for a word or phrase
+ */
+function findEmojiForText(text: string): string | null {
+  const lowerText = text.toLowerCase().trim()
+
+  // Check for exact match
+  if (EMOJI_MAP[lowerText]) {
+    return EMOJI_MAP[lowerText]
+  }
+
+  // Check for laughter
+  if (detectLaughter(lowerText)) {
+    return '😂'
+  }
+
+  return null
+}
+
+/**
+ * Find emoji matches in a segment, considering multi-word phrases
+ */
+function findEmojiMatches(
+  words: TranscriptionWord[]
+): Array<{ wordIndex: number; emoji: string; phraseLength: number }> {
+  const matches: Array<{ wordIndex: number; emoji: string; phraseLength: number }> = []
+
+  // Check for multi-word phrases first
+  const multiWordPhrases = ['no way', 'lets go']
+  for (let i = 0; i < words.length - 1; i++) {
+    const twoWords = `${words[i].word} ${words[i + 1].word}`.toLowerCase().trim()
+    if (multiWordPhrases.includes(twoWords)) {
+      const emoji = EMOJI_MAP[twoWords]
+      if (emoji) {
+        matches.push({ wordIndex: i, emoji, phraseLength: 2 })
+        i++ // Skip next word since it's part of the phrase
+        continue
+      }
+    }
+  }
+
+  // Check for single-word matches
+  for (let i = 0; i < words.length; i++) {
+    // Skip if already part of a multi-word match
+    if (matches.some(m => i >= m.wordIndex && i < m.wordIndex + m.phraseLength)) {
+      continue
+    }
+
+    const emoji = findEmojiForText(words[i].word)
+    if (emoji) {
+      matches.push({ wordIndex: i, emoji, phraseLength: 1 })
+    }
+  }
+
+  return matches
+}
+
+/**
  * Generate ASS subtitle file with TikTok-style word highlighting
  */
 export function generateTikTokASS(
@@ -375,6 +543,8 @@ export function generateTikTokASS(
     outlineWidth?: number
     borderStyle?: number
     textTransform?: 'uppercase' | 'lowercase' | 'none'
+    emojis?: boolean
+    emojiAnimation?: boolean
   } = {}
 ): string {
   // Load preset if specified, otherwise use defaults
@@ -396,9 +566,12 @@ export function generateTikTokASS(
       fadeIn: true,
       intensity: 'medium',
     },
+    emojis = false,
+    emojiAnimation = true,
   } = options
 
   const yPosition = position === 'bottom' ? 800 : position === 'top' ? 200 : 540
+  const emojiFontSize = Math.floor(fontSize * 1.25) // Emojis slightly larger
 
   // Calculate animation parameters based on intensity
   const getAnimationParams = () => {
@@ -412,6 +585,14 @@ export function generateTikTokASS(
 
   const animParams = getAnimationParams()
 
+  // Build styles section
+  let stylesSection = `Style: Default,${fontName},${fontSize},${primaryColor},${highlightColor},${outlineColor},&H80000000,-1,0,0,0,100,100,0,0,${borderStyle},${outlineWidth},0,2,10,10,${yPosition},1
+Style: Highlight,${fontName},${fontSize},${highlightColor},${primaryColor},${outlineColor},&H80000000,-1,0,0,0,100,100,0,0,${borderStyle},${outlineWidth},0,2,10,10,${yPosition},1`
+
+  if (emojis) {
+    stylesSection += `\nStyle: Emoji,Arial,${emojiFontSize},&HFFFFFF,&HFFFFFF,&H000000,&H80000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,${yPosition},1`
+  }
+
   const header = `[Script Info]
 Title: ClipForge Captions
 ScriptType: v4.00+
@@ -420,8 +601,7 @@ PlayResY: 1920
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${fontName},${fontSize},${primaryColor},${highlightColor},${outlineColor},&H80000000,-1,0,0,0,100,100,0,0,${borderStyle},${outlineWidth},0,2,10,10,${yPosition},1
-Style: Highlight,${fontName},${fontSize},${highlightColor},${primaryColor},${outlineColor},&H80000000,-1,0,0,0,100,100,0,0,${borderStyle},${outlineWidth},0,2,10,10,${yPosition},1
+${stylesSection}
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -449,6 +629,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       )
       continue
     }
+
+    // Find emoji matches if enabled
+    const emojiMatches = emojis ? findEmojiMatches(segment.words) : []
 
     // Word-by-word highlighting
     for (let i = 0; i < segment.words.length; i++) {
@@ -494,6 +677,42 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
       events.push(
         `Dialogue: 0,${formatASSTime(word.start)},${formatASSTime(endTime)},Default,,0,0,0,,${text}`
+      )
+    }
+
+    // Add emoji events
+    for (const match of emojiMatches) {
+      const matchWord = segment.words[match.wordIndex]
+      if (!matchWord) continue
+
+      // Calculate approximate position
+      // Estimate word width (rough approximation)
+      const charWidth = fontSize * 0.6
+      const wordsBeforeCurrent = segment.words.slice(0, match.wordIndex)
+      const textBeforeWidth = wordsBeforeCurrent.reduce((sum, w) => sum + (w.word.length * charWidth) + charWidth, 0)
+      const currentWordWidth = matchWord.word.length * charWidth
+
+      // Position emoji to the right of the word
+      const xPosition = 540 + textBeforeWidth + currentWordWidth + (fontSize * 0.5) // Center X (540) + offset
+
+      // Duration: show emoji for the matched word(s) duration
+      const lastWordInPhrase = segment.words[match.wordIndex + match.phraseLength - 1]
+      const emojiStart = matchWord.start
+      const emojiEnd = lastWordInPhrase ? lastWordInPhrase.end : matchWord.end
+      const emojiDuration = (emojiEnd - emojiStart) * 1000 // Convert to milliseconds
+
+      // Build emoji dialogue with animation if enabled
+      let emojiText = match.emoji
+      if (emojiAnimation) {
+        // Scale up animation: 0-200ms scale to 120%, 200-400ms settle to 100%
+        const animDuration = Math.min(200, emojiDuration / 2)
+        emojiText = `{\\pos(${Math.floor(xPosition)},${yPosition})\\t(0,${animDuration},\\fscx120\\fscy120)\\t(${animDuration},${animDuration * 2},\\fscx100\\fscy100)}${match.emoji}`
+      } else {
+        emojiText = `{\\pos(${Math.floor(xPosition)},${yPosition})}${match.emoji}`
+      }
+
+      events.push(
+        `Dialogue: 1,${formatASSTime(emojiStart)},${formatASSTime(emojiEnd)},Emoji,,0,0,0,,${emojiText}`
       )
     }
   }

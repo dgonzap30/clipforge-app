@@ -309,4 +309,37 @@ describe('Integration expectations', () => {
     expect(result).toBeDefined()
     expect(result.assPath).toBe('/test/output/captions.ass')
   })
+
+  test('should pass emoji configuration to ASS generator', async () => {
+    const result = await captionStage({
+      videoPath: '/test/video.mp4',
+      outputDir: '/test/output',
+      config: {
+        styling: {
+          emojis: true,
+          emojiAnimation: true,
+        },
+      },
+    })
+
+    expect(result).toBeDefined()
+    // In a real integration test, we'd verify the ASS file contains emoji configuration
+  })
+
+  test('should support emoji configuration with other styling options', async () => {
+    const result = await captionStage({
+      videoPath: '/test/video.mp4',
+      outputDir: '/test/output',
+      config: {
+        styling: {
+          fontSize: 48,
+          position: 'center',
+          emojis: true,
+          emojiAnimation: false,
+        },
+      },
+    })
+
+    expect(result).toBeDefined()
+  })
 })
