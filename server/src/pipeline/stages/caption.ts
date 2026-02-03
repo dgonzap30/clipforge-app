@@ -12,6 +12,7 @@ import {
   transcribeWithLocalWhisper,
   generateTikTokASS,
   burnCaptions,
+  CAPTION_PRESETS,
   type TranscriptionResult,
   type TranscribeConfig,
   type CaptionAnimations,
@@ -30,6 +31,7 @@ export interface CaptionConfig {
 
   // ASS styling options
   styling?: {
+    preset?: keyof typeof CAPTION_PRESETS
     fontSize?: number
     fontName?: string
     primaryColor?: string
@@ -37,6 +39,9 @@ export interface CaptionConfig {
     outlineColor?: string
     position?: 'bottom' | 'center' | 'top'
     animations?: CaptionAnimations
+    outlineWidth?: number
+    borderStyle?: number
+    textTransform?: 'uppercase' | 'lowercase' | 'none'
   }
 
   // Output settings
