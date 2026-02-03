@@ -672,3 +672,48 @@ Environment variables needed:
 - Add B-roll preview generation
 - Cache LLM analyses for reprocessing
 - Add analytics for B-roll engagement metrics
+
+---
+
+## Task: Add animation effects to ASS caption generator
+
+### Changes Made:
+- Added CaptionAnimations interface with configurable bounce, glow, fadeIn effects and intensity levels
+- Updated generateTikTokASS() to accept animations configuration parameter
+- Implemented bounce effect: words scale from 100% to 105-120% (based on intensity) and back
+- Implemented glow pulse effect: outline width increases from 3 to 4-6 (based on intensity) and back
+- Implemented fade-in effect: words fade in from alpha 80-200 to 0 (fully opaque) based on intensity
+- Added intensity levels: 'subtle' (105% scale, 4px outline), 'medium' (110% scale, 5px outline), 'strong' (120% scale, 6px outline)
+- Default behavior: all animations enabled with 'medium' intensity
+- Animations use ASS \t() transform tags for smooth frame-accurate animations
+- Updated CaptionConfig interface in caption.ts to include animations in styling options
+
+### Files Modified:
+- server/src/captions/transcribe.ts (added CaptionAnimations interface, updated generateTikTokASS function)
+- server/src/pipeline/stages/caption.ts (added CaptionAnimations import and to styling config)
+
+### Files Created:
+- server/src/captions/transcribe.test.ts (13 new tests covering all animation scenarios)
+
+### Tests Added:
+- Test for bounce animation generation
+- Test for glow pulse animation generation
+- Test for fade-in animation generation
+- Test for all animations combined
+- Test for intensity levels (subtle, medium, strong)
+- Test for animations disabled
+- Test for word-by-word highlighting preservation
+- Integration tests in caption.test.ts for animation config passing through pipeline
+
+### Test Results:
+- All 27 caption-related tests passing
+- All 13 new transcribe tests passing
+- Animation tags correctly generated in ASS output
+- Proper ASS syntax for \t() transforms and \fade() effects
+
+### Notes:
+- Animations are hardware-accelerated by ASS renderer (no performance impact)
+- Animation timings are calculated per-word based on actual word duration
+- Default configuration enables all animations for best visual impact
+- Can be fully disabled by setting all animation flags to false
+- ASS format natively supports these effects, no external dependencies needed
