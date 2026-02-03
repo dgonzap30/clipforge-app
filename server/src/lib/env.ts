@@ -15,7 +15,7 @@ export const env = {
   // YouTube
   YOUTUBE_CLIENT_ID: process.env.YOUTUBE_CLIENT_ID || '',
   YOUTUBE_CLIENT_SECRET: process.env.YOUTUBE_CLIENT_SECRET || '',
-  YOUTUBE_REDIRECT_URI: process.env.YOUTUBE_REDIRECT_URI || 'http://localhost:3000/api/platforms/youtube/callback',
+  YOUTUBE_REDIRECT_URI: process.env.YOUTUBE_REDIRECT_URI || 'http://localhost:8787/api/platforms/youtube/callback',
 
   // Instagram
   INSTAGRAM_APP_ID: process.env.INSTAGRAM_APP_ID || '',
@@ -25,7 +25,7 @@ export const env = {
   // TikTok
   TIKTOK_CLIENT_KEY: process.env.TIKTOK_CLIENT_KEY || '',
   TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
-  TIKTOK_REDIRECT_URI: process.env.TIKTOK_REDIRECT_URI || 'http://localhost:3000/api/platforms/tiktok/callback',
+  TIKTOK_REDIRECT_URI: process.env.TIKTOK_REDIRECT_URI || 'http://localhost:8787/api/platforms/tiktok/callback',
 
   // OpenAI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',

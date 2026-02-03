@@ -1,6 +1,6 @@
 tasks:
   - title: Wire chat log fetching and restore chat weight in pipeline
-    completed: false
+    completed: true
     description: >
       File: server/src/analysis/chat.ts
 
@@ -43,7 +43,7 @@ tasks:
 
       - If chat fetch fails, pipeline continues with empty chat array
   - title: Wire viewer clips into pipeline and honor all job settings
-    completed: false
+    completed: true
     description: >
       Files:
 
@@ -142,7 +142,7 @@ tasks:
 
       - Whisper model selection respects user choice
   - title: Wire split-screen layout for gaming content
-    completed: false
+    completed: true
     parallel_group: 1
     description: >
       Files:
@@ -194,7 +194,7 @@ tasks:
 
       - Falls back to normal reframe if splitScreen is false
   - title: Integrate MediaPipe Face Detection for smart reframing
-    completed: false
+    completed: true
     parallel_group: 1
     description: >
       File: server/src/extraction/reframe.ts
@@ -262,7 +262,7 @@ tasks:
 
       - Falls back gracefully if no faces detected
   - title: Add multi-face handling and speaker prioritization
-    completed: false
+    completed: true
     parallel_group: 2
     description: >
       File: server/src/extraction/reframe.ts
@@ -307,7 +307,7 @@ tasks:
 
       - Graceful handling if tracked face leaves frame
   - title: Add animation effects to ASS caption generator
-    completed: false
+    completed: true
     parallel_group: 2
     description: >
       File: server/src/captions/transcribe.ts
@@ -363,7 +363,7 @@ tasks:
 
       - No performance degradation (ASS rendering is hardware-accelerated)
   - title: Add caption style presets
-    completed: false
+    completed: true
     parallel_group: 2
     description: >
       File: server/src/captions/transcribe.ts
@@ -436,7 +436,7 @@ tasks:
 
       - Each preset maintains readability on mobile devices
   - title: Add contextual emoji insertion
-    completed: false
+    completed: true
     parallel_group: 3
     description: >
       File: server/src/captions/transcribe.ts
@@ -496,7 +496,7 @@ tasks:
 
       - Supports all common emoji characters
   - title: Add filler word removal
-    completed: false
+    completed: true
     parallel_group: 3
     description: >
       File: server/src/captions/transcribe.ts
@@ -543,7 +543,7 @@ tasks:
 
       - Toggle disables filler removal when false
   - title: Add auto-zoom stage with face-aware zooming
-    completed: false
+    completed: true
     description: >
       Files:
 
@@ -600,7 +600,7 @@ tasks:
 
       - Toggle works correctly
   - title: Add transition effects for multi-clip compilations
-    completed: false
+    completed: true
     parallel_group: 4
     description: >
       File: server/src/pipeline/stages/effects.ts
@@ -650,7 +650,7 @@ tasks:
 
       - Works with 2+ clips in a compilation
   - title: Add B-roll insertion using LLM transcript analysis
-    completed: false
+    completed: true
     parallel_group: 4
     description: >
       File: server/src/pipeline/stages/effects.ts
@@ -700,7 +700,7 @@ tasks:
 
       - Graceful failure if API quota exceeded
   - title: Implement TikTok Content Posting API integration
-    completed: false
+    completed: true
     parallel_group: 5
     description: >
       Files:
@@ -762,7 +762,7 @@ tasks:
 
       - Refresh token flow handles expired tokens
   - title: Implement YouTube Data API v3 integration
-    completed: false
+    completed: true
     parallel_group: 5
     description: |
       Files:
@@ -816,7 +816,7 @@ tasks:
       - Quota errors are handled gracefully
       - Refresh token works for long-lived connections
   - title: Implement Instagram Graph API integration
-    completed: false
+    completed: true
     parallel_group: 5
     description: >
       Files:
@@ -876,7 +876,7 @@ tasks:
 
       - Long-lived tokens are refreshed automatically
   - title: Build platform connection UI in Settings page
-    completed: false
+    completed: true
     description: |
       Files:
       - src/pages/Settings.tsx
