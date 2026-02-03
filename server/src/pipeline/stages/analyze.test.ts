@@ -331,3 +331,81 @@ describe('analyzeWithDefaultWeights', () => {
     expect(call[2]).toEqual(viewerClips)
   })
 })
+
+describe('analyze with job settings', () => {
+  let extractAudioSpy3: any
+  let getAudioLevelsSpy3: any
+  let analyzeAudioLevelsSpy3: any
+  let fuseSignalsSpy3: any
+
+  beforeEach(() => {
+    extractAudioSpy3 = spyOn(audio, 'extractAudio').mockResolvedValue(undefined)
+    getAudioLevelsSpy3 = spyOn(audio, 'getAudioLevels').mockResolvedValue([])
+    analyzeAudioLevelsSpy3 = spyOn(audio, 'analyzeAudioLevels').mockReturnValue([])
+    fuseSignalsSpy3 = spyOn(fusion, 'fuseSignals').mockReturnValue([])
+  })
+
+  afterEach(() => {
+    extractAudioSpy3?.mockRestore()
+    getAudioLevelsSpy3?.mockRestore()
+    analyzeAudioLevelsSpy3?.mockRestore()
+    fuseSignalsSpy3?.mockRestore()
+  })
+
+  test('should honor minDuration and maxDuration settings', async () => {
+    const input: AnalyzeStageInput = {
+      videoPath: '/path/to/video.mp4',
+    }
+
+    await analyze(input, {
+      minDuration: 20,
+      maxDuration: 90,
+    })
+
+    expect(fuseSignalsSpy3).toHaveBeenCalledTimes(1)
+    const call = fuseSignalsSpy3.mock.calls[0]
+    expect(call[3]).toMatchObject({
+      minDuration: 20,
+      maxDuration: 90,
+    })
+  })
+
+  test('should honor sensitivity setting via minScore', async () => {
+    const input: AnalyzeStageInput = {
+      videoPath: '/path/to/video.mp4',
+    }
+
+    await analyze(input, {
+      minScore: 50, // equivalent to 'low' sensitivity
+    })
+
+    expect(fuseSignalsSpy3).toHaveBeenCalledTimes(1)
+    const call = fuseSignalsSpy3.mock.calls[0]
+    expect(call[3]).toMatchObject({
+      minScore: 50,
+    })
+  })
+
+  test('should accept all fusion config options', async () => {
+    const input: AnalyzeStageInput = {
+      videoPath: '/path/to/video.mp4',
+    }
+
+    const fusionConfig = {
+      weights: { chat: 0.3, audio: 0.5, clips: 0.2 },
+      minScore: 40,
+      minDuration: 15,
+      maxDuration: 75,
+      preRoll: 3,
+      postRoll: 7,
+      convergenceBonus: 25,
+      convergenceWindow: 8,
+    }
+
+    await analyze(input, fusionConfig)
+
+    expect(fuseSignalsSpy3).toHaveBeenCalledTimes(1)
+    const call = fuseSignalsSpy3.mock.calls[0]
+    expect(call[3]).toEqual(fusionConfig)
+  })
+})

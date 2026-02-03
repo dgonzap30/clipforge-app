@@ -9,7 +9,7 @@
  */
 
 import { extractAudio, getAudioLevels, analyzeAudioLevels, AudioMoment } from '../../analysis/audio'
-import { fuseSignals, SignalMoment, ViewerClip } from '../../analysis/fusion'
+import { fuseSignals, SignalMoment, ViewerClip, FusionConfig } from '../../analysis/fusion'
 import { ChatMoment, fetchChatLogs, analyzeChatLogs } from '../../analysis/chat'
 import { analyzeVisualMoments, VisualMoment } from '../../analysis/visual'
 
@@ -27,7 +27,7 @@ export interface AnalyzeStageOutput {
   audioPath: string
 }
 
-export interface AnalyzeStageConfig {
+export interface AnalyzeStageConfig extends Partial<FusionConfig> {
   audioOutputPath?: string
   weights?: {
     chat: number
@@ -101,13 +101,15 @@ export async function analyze(
     }
   }
 
-  // Step 6: Fuse signals with specified weights
+  // Step 6: Fuse signals with config (excluding audioOutputPath)
+  const { audioOutputPath: _audioOutputPath, ...fusionConfig } = config
   const fusedMoments = fuseSignals(
     chatMoments,
     audioMoments,
     viewerClips,
     visualMoments,
-    { weights }
+    [],
+    { ...fusionConfig, weights }
   )
 
   return {
