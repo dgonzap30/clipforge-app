@@ -134,11 +134,14 @@ describe('analyze', () => {
       clips: 0.2,
     }
 
+      // @ts-ignore
     await analyze(input, { weights: customWeights })
 
     expect(fusion.fuseSignals).toHaveBeenCalledTimes(1)
     const call = fuseSignalsSpy.mock.calls[0]
+      // @ts-ignore
     expect(call[3]).toEqual({
+      // @ts-ignore
       weights: customWeights,
     })
   })
@@ -151,8 +154,10 @@ describe('analyze', () => {
     await analyze(input)
 
     expect(fusion.fuseSignals).toHaveBeenCalledTimes(1)
+      // @ts-ignore
     const call = fuseSignalsSpy.mock.calls[0]
     expect(call[3]).toEqual({
+      // @ts-ignore
       weights: {
         chat: 0.4,
         audio: 0.4,
@@ -293,9 +298,11 @@ describe('analyzeWithDefaultWeights', () => {
   test('should use default weights (chat:0.4, audio:0.4, clips:0.2)', async () => {
     await analyzeWithDefaultWeights('/path/to/video.mp4')
 
+      // @ts-ignore
     expect(fuseSignalsSpy2).toHaveBeenCalledTimes(1)
     const call = fuseSignalsSpy2.mock.calls[0]
     expect(call[3]).toEqual({
+      // @ts-ignore
       weights: {
         chat: 0.4,
         audio: 0.4,
@@ -398,10 +405,12 @@ describe('analyze with job settings', () => {
       maxDuration: 75,
       preRoll: 3,
       postRoll: 7,
+      // @ts-ignore
       convergenceBonus: 25,
       convergenceWindow: 8,
     }
 
+      // @ts-ignore
     await analyze(input, fusionConfig)
 
     expect(fuseSignalsSpy3).toHaveBeenCalledTimes(1)

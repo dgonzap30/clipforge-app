@@ -2,7 +2,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useAuth } from './useAuth'
 import { supabase } from '@/lib/supabase'
-import type { Session } from '@supabase/supabase-js'
+import type { Session, AuthError } from '@supabase/supabase-js'
 
 // Mock the Supabase client
 vi.mock('@/lib/supabase', () => ({
@@ -30,7 +30,6 @@ vi.mock('@/store', () => ({
 }))
 
 describe('useAuth', () => {
-  const mockSetUser = vi.fn()
   const mockUnsubscribe = vi.fn()
 
   beforeEach(() => {
@@ -55,7 +54,7 @@ describe('useAuth', () => {
             provider_id: 'twitch-123',
           },
         },
-      } as Session
+      } as unknown as Session
 
       vi.mocked(supabase.auth.getSession).mockResolvedValue({
         data: { session: mockSession },
@@ -135,10 +134,10 @@ describe('useAuth', () => {
       const mockError = new Error('Login failed')
       vi.mocked(supabase.auth.signInWithOAuth).mockResolvedValue({
         data: { provider: 'twitch', url: null },
-        error: mockError,
+        error: mockError as unknown as AuthError,
       })
 
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
 
       const { result } = renderHook(() => useAuth())
 
@@ -188,10 +187,10 @@ describe('useAuth', () => {
 
       const mockError = new Error('Logout failed')
       vi.mocked(supabase.auth.signOut).mockResolvedValue({
-        error: mockError,
+        error: mockError as unknown as AuthError,
       })
 
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
 
       const { result } = renderHook(() => useAuth())
 
@@ -220,7 +219,7 @@ describe('useAuth', () => {
             provider_id: 'twitch-123',
           },
         },
-      } as Session
+      } as unknown as Session
 
       vi.mocked(supabase.auth.getSession).mockResolvedValue({
         data: { session: mockSession },
@@ -255,10 +254,10 @@ describe('useAuth', () => {
       const mockError = new Error('Session error')
       vi.mocked(supabase.auth.getSession).mockResolvedValue({
         data: { session: null },
-        error: mockError,
+        error: mockError as unknown as AuthError,
       })
 
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
 
       const { result } = renderHook(() => useAuth())
 

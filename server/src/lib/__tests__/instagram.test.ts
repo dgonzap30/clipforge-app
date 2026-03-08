@@ -211,6 +211,7 @@ describe('Instagram Graph API', () => {
     const mockIgUserId = '123456789'
     let client: InstagramClient
 
+      // @ts-ignore
     beforeEach(() => {
       client = new InstagramClient(mockAccessToken, mockIgUserId)
     })

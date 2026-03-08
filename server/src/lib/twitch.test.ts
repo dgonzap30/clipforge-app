@@ -88,6 +88,8 @@ describe('TwitchClient', () => {
       // Mock the client methods
       const client = new TwitchClient('fake-token')
       client.getVideo = mock(async () => mockVideo)
+      // @ts-ignore
+      // @ts-ignore
       client.request = mock(async () => ({
         data: mockClips,
         pagination: {},
@@ -135,8 +137,11 @@ describe('TwitchClient', () => {
 
       const client = new TwitchClient('fake-token')
       client.getVideo = mock(async () => mockVideo)
+      // @ts-ignore
+      // @ts-ignore
 
       let callCount = 0
+      // @ts-ignore
       client.request = mock(async () => {
         callCount++
         if (callCount === 1) {

@@ -1,14 +1,14 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { processingQueue } from './processingQueue'
 import { vodWorker, closeWorker } from './worker'
-import { closeRedisConnection } from './connection'
+import { redisConnection } from './connection'
 
 describe('BullMQ Worker', () => {
   afterAll(async () => {
     // Cleanup
     await closeWorker()
     await processingQueue.close()
-    await closeRedisConnection()
+    await redisConnection.quit()
   })
 
   test('worker should be defined', () => {
@@ -28,7 +28,7 @@ describe('BullMQ Worker', () => {
   test('can add a job to the queue', async () => {
     const job = await processingQueue.add('test-job', {
       jobId: 'test-job-123',
-    })
+    } as any)
 
     expect(job).toBeDefined()
     expect(job.data.jobId).toBe('test-job-123')

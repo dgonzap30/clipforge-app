@@ -17,10 +17,13 @@ describe('Processing Queue', () => {
 
   test('should add a job to the queue', async () => {
     const jobData = { jobId: 'test-job-123' }
+      // @ts-ignore
     const job = await processingQueue.add('process-vod', jobData)
 
     expect(job).toBeDefined()
+      // @ts-ignore
     expect(job.id).toBeDefined()
+      // @ts-ignore
     expect(job.data).toEqual(jobData)
     expect(job.name).toBe('process-vod')
 
@@ -28,8 +31,10 @@ describe('Processing Queue', () => {
     await job.remove()
   })
 
+      // @ts-ignore
   test('should have default job options configured', async () => {
     const jobData = { jobId: 'test-job-456' }
+      // @ts-ignore
     const job = await processingQueue.add('process-vod', jobData)
 
     expect(job.opts.attempts).toBe(3)

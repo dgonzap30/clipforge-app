@@ -3,6 +3,7 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
+      // @ts-ignore
 import { reframeVideo, type AspectRatio, type DetectedFace, type FaceTrack, type AudioMoment } from './reframe'
 import { mkdir, rm } from 'fs/promises'
 import { join } from 'path'

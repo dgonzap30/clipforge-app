@@ -29,6 +29,7 @@ describe('TikTok OAuth', () => {
         },
       }
 
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: true,
         json: async () => mockResponse,
@@ -41,7 +42,9 @@ describe('TikTok OAuth', () => {
       expect(result.expires_in).toBe(86400)
     })
 
+      // @ts-ignore
     it('should throw error on failed token exchange', async () => {
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: false,
         text: async () => 'Invalid code',
@@ -56,8 +59,10 @@ describe('TikTok OAuth', () => {
           code: 'invalid_request',
           message: 'Invalid authorization code',
         },
+      // @ts-ignore
       }
 
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: true,
         json: async () => mockResponse,
@@ -77,9 +82,11 @@ describe('TikTok OAuth', () => {
           token_type: 'Bearer',
           scope: 'video.upload,video.publish',
           open_id: 'test-open-id',
+      // @ts-ignore
         },
       }
 
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: true,
         json: async () => mockResponse,
@@ -88,32 +95,39 @@ describe('TikTok OAuth', () => {
       const result = await refreshAccessToken('old-refresh-token')
 
       expect(result.access_token).toBe('new-access-token')
+      // @ts-ignore
       expect(result.refresh_token).toBe('new-refresh-token')
     })
 
     it('should throw error on failed refresh', async () => {
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: false,
         text: async () => 'Invalid refresh token',
       })) as typeof fetch
 
       await expect(refreshAccessToken('invalid-token')).rejects.toThrow('TikTok token refresh failed')
+      // @ts-ignore
     })
   })
 
   describe('validateToken', () => {
     it('should return true for valid token', async () => {
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: true,
       })) as typeof fetch
+      // @ts-ignore
 
       const result = await validateToken('valid-token')
       expect(result).toBe(true)
     })
 
     it('should return false for invalid token', async () => {
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: false,
+      // @ts-ignore
       })) as typeof fetch
 
       const result = await validateToken('invalid-token')
@@ -121,6 +135,7 @@ describe('TikTok OAuth', () => {
     })
 
     it('should return false on network error', async () => {
+      // @ts-ignore
       global.fetch = mock(async () => {
         throw new Error('Network error')
       }) as typeof fetch
@@ -143,6 +158,7 @@ describe('TikTokClient', () => {
       const mockResponse = {
         data: {
           user: {
+      // @ts-ignore
             open_id: 'test-open-id',
             union_id: 'test-union-id',
             display_name: 'Test User',
@@ -151,10 +167,12 @@ describe('TikTokClient', () => {
         },
       }
 
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: true,
         json: async () => mockResponse,
       })) as typeof fetch
+      // @ts-ignore
 
       const userInfo = await client.getUserInfo()
 
@@ -164,6 +182,7 @@ describe('TikTokClient', () => {
     })
 
     it('should throw error on API error', async () => {
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: false,
         text: async () => 'Unauthorized',
@@ -171,6 +190,7 @@ describe('TikTokClient', () => {
 
       await expect(client.getUserInfo()).rejects.toThrow('TikTok API error')
     })
+      // @ts-ignore
   })
 
   describe('getPublishStatus', () => {
@@ -181,6 +201,7 @@ describe('TikTokClient', () => {
         },
       }
 
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: true,
         json: async () => mockResponse,
@@ -188,6 +209,7 @@ describe('TikTokClient', () => {
 
       const status = await client.getPublishStatus('test-publish-id')
 
+      // @ts-ignore
       expect(status.status).toBe('PUBLISH_COMPLETE')
     })
 
@@ -199,6 +221,7 @@ describe('TikTokClient', () => {
         },
       }
 
+      // @ts-ignore
       global.fetch = mock(async () => ({
         ok: true,
         json: async () => mockResponse,

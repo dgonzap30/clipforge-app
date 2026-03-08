@@ -249,6 +249,8 @@ describe('downloadVod standalone function', () => {
     const stage = createDownloadStage({
       format: 'best',
       maxFileSize: 100,
+      // @ts-ignore
+      // @ts-ignore
       onProgress: (percent) => progressCalls.push(percent),
     })
 

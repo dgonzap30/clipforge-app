@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, mock } from 'bun:test'
 import { Hono } from 'hono'
-import platformsRoutes from './platforms'
+import { platformsRoutes } from './platforms'
 
 describe('Platforms Routes', () => {
   let app: Hono

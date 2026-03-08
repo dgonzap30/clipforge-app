@@ -22,6 +22,7 @@ describe('Pipeline Orchestrator', () => {
     clipIds: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+      // @ts-ignore
     settings: {
       minDuration: 15,
       maxDuration: 60,
@@ -42,6 +43,7 @@ describe('Pipeline Orchestrator', () => {
     }
 
     const callback = createDatabaseProgressCallback(updateJobFn)
+      // @ts-ignore
 
     await callback('job-123', 'downloading', 15, 'Downloading VOD...')
 

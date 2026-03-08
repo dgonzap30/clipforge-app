@@ -39,6 +39,7 @@ describe('processingQueue', () => {
         faceReactions: true,
         autoCaptions: true,
         outputFormat: 'vertical',
+        splitScreen: false,
       },
     }
 
@@ -70,6 +71,7 @@ describe('processingQueue', () => {
         faceReactions: false,
         autoCaptions: true,
         outputFormat: 'square',
+        splitScreen: false,
       },
     }
 
@@ -102,6 +104,7 @@ describe('processingQueue', () => {
         faceReactions: true,
         autoCaptions: false,
         outputFormat: 'horizontal',
+        splitScreen: false,
       },
     }
 
@@ -134,6 +137,7 @@ describe('processingQueue', () => {
         faceReactions: true,
         autoCaptions: true,
         outputFormat: 'vertical',
+        splitScreen: false,
       },
     }
 
@@ -163,6 +167,7 @@ describe('processingQueue', () => {
         faceReactions: true,
         autoCaptions: true,
         outputFormat: 'vertical',
+        splitScreen: false,
       },
     }
 
