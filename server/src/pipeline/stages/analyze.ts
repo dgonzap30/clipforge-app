@@ -27,16 +27,19 @@ export interface AnalyzeStageOutput {
   audioPath: string
 }
 
-export interface AnalyzeStageConfig extends Partial<FusionConfig> {
-  audioOutputPath?: string
+export interface AnalyzeStageConfig extends Partial<Omit<FusionConfig, 'weights'>> {
   weights?: {
     chat: number
     audio: number
     clips: number
     visual: number
+    transcript?: number
   }
+  audioOutputPath?: string
+
   enableVisualAnalysis?: boolean
   visualAnalysisFps?: number
+  onProgress?: (percent: number, message: string) => void
 }
 
 const DEFAULT_WEIGHTS = {
@@ -44,6 +47,7 @@ const DEFAULT_WEIGHTS = {
   audio: 0.3,
   clips: 0.2,
   visual: 0.2,
+  transcript: 0,
 }
 
 /**
@@ -64,7 +68,9 @@ export async function analyze(
   const audioPath = config.audioOutputPath ??
     videoPath.replace(/\.[^.]+$/, '_audio.wav')
 
-  // Step 1: Fetch and analyze chat logs if vodId is provided
+  // Step 1: Fetch and analyze chat logs
+  if (config.onProgress) config.onProgress(10, 'Analyzing chat logs...')
+
   let chatMoments: ChatMoment[] = []
   if (vodId) {
     try {
@@ -79,9 +85,11 @@ export async function analyze(
   }
 
   // Step 2: Extract audio from video
+  if (config.onProgress) config.onProgress(30, 'Extracting audio...')
   await extractAudio(videoPath, audioPath)
 
   // Step 3: Get audio amplitude levels
+  if (config.onProgress) config.onProgress(50, 'Analyzing audio levels...')
   const audioLevels = await getAudioLevels(audioPath)
 
   // Step 4: Analyze audio levels to find moments
@@ -90,6 +98,7 @@ export async function analyze(
   // Step 5: Analyze visual moments (if enabled)
   let visualMoments: VisualMoment[] = []
   if (config.enableVisualAnalysis !== false) {
+    if (config.onProgress) config.onProgress(70, 'Analyzing visual scenes...')
     try {
       console.log('[Analyze] Running visual scene analysis')
       visualMoments = await analyzeVisualMoments(videoPath, {
@@ -101,15 +110,23 @@ export async function analyze(
     }
   }
 
-  // Step 6: Fuse signals with config (excluding audioOutputPath)
+  // Step 6: Fuse signals
+  if (config.onProgress) config.onProgress(90, 'Fusing signal data...')
   const { audioOutputPath: _audioOutputPath, ...fusionConfig } = config
+
+  // Ensure weights has all required properties for FusionConfig
+  const fusionWeights = {
+    ...weights,
+    transcript: weights.transcript ?? 0
+  }
+
   const fusedMoments = fuseSignals(
     chatMoments,
     audioMoments,
     viewerClips,
     visualMoments,
     [],
-    { ...fusionConfig, weights }
+    { ...fusionConfig, weights: fusionWeights }
   )
 
   return {

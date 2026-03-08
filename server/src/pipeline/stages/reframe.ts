@@ -41,10 +41,25 @@ function shouldUseSplitScreen(context: PipelineContext): boolean {
  * For gaming content with splitScreen enabled, uses split-screen layout
  * with facecam on top and gameplay on bottom.
  */
-export const reframeStage: PipelineStage = {
-  name: 'reframe',
-  execute: async (context: PipelineContext): Promise<PipelineContext> => {
-    const { extractedClipsDir, settings } = context
+export interface ReframeStageConfig {
+  onProgress?: (percent: number, message: string) => Promise<void> | void
+}
+
+/**
+ * Reframe stage implementation wrapper
+ */
+export class ReframeStage implements PipelineStage {
+  name = 'reframe'
+
+  constructor(private config: ReframeStageConfig = {}) { }
+
+  async execute(context: PipelineContext): Promise<PipelineContext> {
+    const { extractedClipsDir, settings, extractedClips } = context
+
+    // Update progress reporter to use context if available
+    const reporter = context.reportProgress
+      ? (percent: number, message: string) => context.reportProgress!(percent, message)
+      : (this.config.onProgress ? (percent: number, message: string) => this.config.onProgress!(percent, message) : undefined)
 
     if (!extractedClipsDir) {
       throw new Error('extractedClipsDir not found in context. Extract stage must run first.')
@@ -58,76 +73,105 @@ export const reframeStage: PipelineStage = {
     const { mkdirSync } = await import('fs')
     mkdirSync(reframedClipsDir, { recursive: true })
 
-    // Get all video files from extracted clips directory
-    const files = await readdir(extractedClipsDir)
-    const videoFiles = files.filter((file) => {
-      const ext = extname(file).toLowerCase()
-      return ['.mp4', '.mov', '.avi', '.mkv'].includes(ext)
-    })
-
-    if (videoFiles.length === 0) {
-      throw new Error(`No video files found in ${extractedClipsDir}`)
-    }
-
     // Check if split-screen should be used
     const useSplitScreen = shouldUseSplitScreen(context)
+
+    // Items to process
+    let itemsToProcess: { path: string, startTime?: number, endTime?: number, clipId?: string }[] = []
+
+    if (extractedClips && extractedClips.length > 0) {
+      // Prefer using context data as it contains timestamps
+      itemsToProcess = extractedClips.map(clip => ({
+        path: clip.path,
+        startTime: clip.startTime,
+        endTime: clip.endTime,
+        clipId: clip.clipId
+      }))
+    } else {
+      // Fallback to directory listing (no timestamps available)
+      const files = await readdir(extractedClipsDir)
+      const videoFiles = files.filter((file) => {
+        const ext = extname(file).toLowerCase()
+        return ['.mp4', '.mov', '.avi', '.mkv'].includes(ext)
+      })
+      itemsToProcess = videoFiles.map(file => ({
+        path: join(extractedClipsDir, file),
+        clipId: file.replace(/\.[^.]+$/, '')
+      }))
+    }
+
+    if (itemsToProcess.length === 0) {
+      // Don't throw if no clips, just return context
+      return { ...context, reframedClips: [], reframedClipsDir, currentStage: 'reframe', progress: 100 }
+    }
 
     if (useSplitScreen) {
       console.log(`[Reframe] Split-screen mode enabled for gaming content (${targetAspect})`)
     } else {
-      console.log(`[Reframe] Processing ${videoFiles.length} clips with smart reframing (${targetAspect})`)
+      console.log(`[Reframe] Processing ${itemsToProcess.length} clips with smart reframing (${targetAspect})`)
     }
 
     // Process each clip
     const results = []
-    for (let i = 0; i < videoFiles.length; i++) {
-      const file = videoFiles[i]
-      const inputPath = join(extractedClipsDir, file)
-      const outputPath = join(reframedClipsDir, file)
+    for (let i = 0; i < itemsToProcess.length; i++) {
+      const item = itemsToProcess[i]
+      const inputPath = item.path
+      const filename = basename(inputPath)
+      const outputPath = join(reframedClipsDir, filename)
 
-      console.log(`[Reframe] ${i + 1}/${videoFiles.length}: ${basename(file)}`)
+      const percent = Math.round((i / itemsToProcess.length) * 100)
+      if (reporter) {
+        await reporter(percent, `Reframing clip ${i + 1}/${itemsToProcess.length}: ${filename}`)
+      }
+
+      console.log(`[Reframe] ${i + 1}/${itemsToProcess.length}: ${filename}`)
 
       try {
         if (useSplitScreen) {
           // Split-screen layout for gaming content
-          // NOTE: This requires dual video sources (facecam + gameplay)
           // Check if we have metadata pointing to separate sources in context
           const facecamPath = context.metadata?.facecamPath
           const gameplayPath = context.metadata?.gameplayPath
 
           if (facecamPath && gameplayPath) {
             // We have dual sources - use split-screen layout
-            console.log(`[Reframe] Creating split-screen layout with facecam and gameplay`)
+            const startTime = item.startTime || 0
+            const duration = (item.endTime && item.startTime) ? (item.endTime - item.startTime) : undefined
+
+            console.log(`[Reframe] Creating split-screen layout (start: ${startTime}, dur: ${duration})`)
 
             await createSplitScreen(gameplayPath, facecamPath, outputPath, {
               facecamRatio: 0.35,
               targetAspect,
+              startTime,
+              duration
             })
 
             results.push({
-              file,
+              file: filename,
               outputPath,
               method: 'split_screen',
               keyframes: 0,
+              clipId: item.clipId
             })
           } else {
-            // No dual sources available - fall back to standard reframe with face tracking
-            // This is expected for MVP since we don't have separate stream extraction yet
+            // No dual sources available - fall back to standard reframe
             console.log(`[Reframe] Split-screen enabled but dual sources not available, using standard reframe`)
 
             const result = await reframeVideo({
               inputPath,
               outputPath,
               targetAspect,
-              faceTracking: true, // Enable MediaPipe face detection
+              faceTracking: true,
               smoothing: 0.7,
             })
 
             results.push({
-              file,
+              file: filename,
               outputPath: result.outputPath,
               method: result.method,
               keyframes: result.keyframes.length,
+              clipId: item.clipId
             })
           }
         } else {
@@ -141,20 +185,23 @@ export const reframeStage: PipelineStage = {
           })
 
           results.push({
-            file,
+            file: filename,
             outputPath: result.outputPath,
             method: result.method,
             keyframes: result.keyframes.length,
+            clipId: item.clipId
           })
         }
 
-        // Update progress
-        const progress = Math.round(((i + 1) / videoFiles.length) * 100)
-        console.log(`[Reframe] Progress: ${progress}%`)
       } catch (error) {
-        console.error(`[Reframe] Failed to process ${file}:`, error)
-        throw new Error(`Failed to reframe ${file}: ${error}`)
+        console.error(`[Reframe] Failed to process ${filename}:`, error)
+        // Don't throw here, allow other clips to finish
       }
+    }
+
+    // Final progress update
+    if (reporter) {
+      await reporter(100, `Reframed ${results.length} clips`)
     }
 
     console.log(`[Reframe] Completed ${results.length} clips`)
@@ -168,15 +215,22 @@ export const reframeStage: PipelineStage = {
       reframedClips: results.map(r => ({
         path: r.outputPath,
         originalPath: join(extractedClipsDir, r.file),
-        clipId: r.file.replace(/\.[^.]+$/, ''),
+        clipId: r.clipId || r.file.replace(/\.[^.]+$/, ''),
       })),
       currentStage: 'reframe',
-      progress: 60, // Approximately 60% through the pipeline
+      progress: 100,
     }
-  },
+  }
 }
 
 /**
- * Export default for convenience
+ * Factory function for creating reframe stage
  */
-export default reframeStage
+export function createReframeStage(config?: ReframeStageConfig): PipelineStage {
+  return new ReframeStage(config)
+}
+
+/**
+ * Legacy export for backward compatibility until refactor is complete
+ */
+export const reframeStage = createReframeStage()

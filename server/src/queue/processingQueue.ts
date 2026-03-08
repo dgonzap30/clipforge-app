@@ -17,6 +17,7 @@ export interface VodProcessingJobData {
 export const processingQueue = new Queue<VodProcessingJobData>('vod-processing', {
   connection: redisConnection,
   defaultJobOptions: {
+    priority: 10, // Default priority (lower number = higher priority)
     attempts: 3,
     backoff: {
       type: 'exponential',

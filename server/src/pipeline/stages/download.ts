@@ -12,13 +12,14 @@ import { PipelineStage, PipelineContext, ProgressCallback } from '../types'
 export interface DownloadStageOptions {
   format?: string // yt-dlp format selector (default: best)
   maxFileSize?: number // max file size in MB (optional)
+  timeout?: number // timeout in seconds (default: 3600)
   onProgress?: ProgressCallback
 }
 
 export class DownloadStage implements PipelineStage {
   name = 'download'
 
-  constructor(private options: DownloadStageOptions = {}) {}
+  constructor(private options: DownloadStageOptions = {}) { }
 
   async validate(context: PipelineContext): Promise<boolean> {
     // Check if yt-dlp is available
@@ -61,6 +62,11 @@ export class DownloadStage implements PipelineStage {
       args.push('--max-filesize', `${this.options.maxFileSize}M`)
     }
 
+    // Report initial startup
+    if (onProgress && context.jobId) {
+      await onProgress(context.jobId, 'downloading', 0, 'Initializing download engine...')
+    }
+
     args.push(vodUrl)
 
     // Track download progress
@@ -90,15 +96,26 @@ export class DownloadStage implements PipelineStage {
           const progress = this.parseProgress(line)
           if (progress && onProgress && progress.percent > lastProgress) {
             lastProgress = progress.percent
-            // Note: onProgress signature is 4 params (jobId, status, progress, message)
-            // But we don't have jobId in this context, so skip progress reporting here
-            // The orchestrator handles progress reporting
+            // Report download progress with detailed message
+            if (context.jobId) {
+              const downloaded = this.formatBytes(progress.downloadedBytes)
+              const total = this.formatBytes(progress.totalBytes)
+              await onProgress(
+                context.jobId,
+                'downloading',
+                progress.percent,
+                `Downloading: ${downloaded}/${total} at ${progress.speed} (ETA: ${progress.eta})`
+              )
+            }
           }
 
           // Check for destination file
           const destinationMatch = line.match(/\[download\] Destination: (.+)/)
           if (destinationMatch) {
             downloadedPath = destinationMatch[1].trim()
+            if (onProgress && context.jobId) {
+              await onProgress(context.jobId, 'downloading', 0, 'Metadata received, starting download...')
+            }
           }
 
           // Check for already downloaded
@@ -115,8 +132,22 @@ export class DownloadStage implements PipelineStage {
         }
       }
 
-      // Wait for process to complete
-      const exitCode = await proc.exited
+      // Wait for process to complete with timeout
+      const timeoutSeconds = this.options.timeout || 3600 // Default 1 hour
+
+      const exitCodePromise = proc.exited
+
+      const timeoutPromise = new Promise<number>((_, reject) => {
+        const id = setTimeout(() => {
+          proc.kill() // Kill the process on timeout
+          reject(new Error(`Download timed out after ${timeoutSeconds}s`))
+        }, timeoutSeconds * 1000)
+
+        // Clear timeout if process exits first
+        exitCodePromise.finally(() => clearTimeout(id))
+      })
+
+      const exitCode = await Promise.race([exitCodePromise, timeoutPromise])
 
       if (exitCode !== 0) {
         // Read stderr for error message
@@ -161,6 +192,17 @@ export class DownloadStage implements PipelineStage {
   }
 
   /**
+   * Format bytes to human-readable string
+   */
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
+  }
+
+  /**
    * Parse yt-dlp progress output
    * Example: [download]  45.2% of 1.23GiB at 2.34MiB/s ETA 00:15
    */
@@ -171,9 +213,9 @@ export class DownloadStage implements PipelineStage {
     speed: string
     eta: string
   } | null {
-    const match = line.match(
-      /\[download\]\s+(\d+\.?\d*)%\s+of\s+~?([\d.]+)([KMG]iB)\s+at\s+([\d.]+[KMG]iB\/s)\s+ETA\s+([\d:]+)/
-    )
+    // Regex to parse progress from yt-dlp
+    // Supports different units (MiB, KiB, B) and ETA formats (Unknown, 00:00)
+    const match = line.match(/\[download\]\s+(\d+\.?\d*)%\s+of\s+~?\s*([\d.]+)([KMGTP]?i?B)\s+at\s+([\d.]+[KMGTP]?i?B\/s)\s+ETA\s+(\S+)/)
 
     if (!match) {
       return null
@@ -184,9 +226,11 @@ export class DownloadStage implements PipelineStage {
 
     // Convert size to bytes
     const sizeMultipliers: Record<string, number> = {
+      B: 1,
       KiB: 1024,
       MiB: 1024 * 1024,
       GiB: 1024 * 1024 * 1024,
+      TiB: 1024 * 1024 * 1024 * 1024,
     }
 
     const totalBytes = parseFloat(sizeStr) * (sizeMultipliers[sizeUnit] || 1)

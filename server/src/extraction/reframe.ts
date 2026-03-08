@@ -542,6 +542,7 @@ function convertFaceTrackToKeyframes(
   }
 
   return keyframes
+}
 
 /**
  * Smooth keyframes to avoid jerky motion
@@ -631,15 +632,31 @@ export async function createSplitScreen(
   options: {
     facecamRatio?: number // 0-1, how much of screen facecam takes
     targetAspect?: AspectRatio
+    startTime?: number // Seconds
+    duration?: number // Seconds
   } = {}
 ): Promise<void> {
-  const { facecamRatio = 0.35, targetAspect = '9:16' } = options
+  const { facecamRatio = 0.35, targetAspect = '9:16', startTime = 0, duration } = options
   const dims = ASPECT_DIMENSIONS[targetAspect]
   
   const facecamHeight = Math.round(dims.height * facecamRatio)
   const gameplayHeight = dims.height - facecamHeight
   
-  await $`ffmpeg -i ${gameplayPath} -i ${facecamPath} \
+  // Build input arguments
+  // If startTime/duration provided, apply to BOTH inputs to sync them
+  const inputArgs: string[] = []
+  
+  // Gameplay input
+  if (startTime > 0) inputArgs.push('-ss', startTime.toString())
+  if (duration) inputArgs.push('-t', duration.toString())
+  inputArgs.push('-i', gameplayPath)
+  
+  // Facecam input
+  if (startTime > 0) inputArgs.push('-ss', startTime.toString())
+  if (duration) inputArgs.push('-t', duration.toString())
+  inputArgs.push('-i', facecamPath)
+
+  await $`ffmpeg ${inputArgs} \
     -filter_complex "
       [0:v]scale=${dims.width}:${gameplayHeight},setsar=1[gameplay];
       [1:v]scale=${dims.width}:${facecamHeight},setsar=1[facecam];

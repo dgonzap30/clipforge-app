@@ -44,7 +44,7 @@ platformsRoutes.get('/connections', async (c) => {
 
   try {
     // Get platform connections from table (TikTok, YouTube)
-    const { data: platformConnections, error: platformError } = await supabase
+    const { data: platformConnections } = await supabase
       .from('platform_connections')
       .select('*')
       .eq('user_id', user_id)
@@ -140,7 +140,7 @@ platformsRoutes.get('/youtube/callback', async (c) => {
     // Get channel info
     const youtubeClient = new YouTubeClient(tokens.access_token)
     const channelData = await youtubeClient.getChannel()
-    const channel = channelData.items?.[0]
+    const channel = channelData.items?.[0] as any
 
     if (!channel) {
       return c.json({ error: 'Failed to fetch YouTube channel info' }, 500)

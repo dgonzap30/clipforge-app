@@ -2,45 +2,31 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { TwitchClient, parseTwitchDuration, getAppAccessToken } from '../lib/twitch'
-import { supabase, verifySupabaseToken } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import '../middleware/auth' // Side-effect import for ContextVariableMap
 
 export const vodsRoutes = new Hono()
 
-// Middleware to require auth using Supabase JWT Bearer token
-const requireAuth = async (c: any, next: any) => {
-  const authHeader = c.req.header('Authorization')
+import { requireAuth } from '../middleware/auth'
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Unauthorized - Missing or invalid Authorization header' }, 401)
-  }
-
-  const token = authHeader.substring(7) // Remove 'Bearer ' prefix
-
+// Middleware to setup Twitch client
+const setupTwitchClient = async (c: any, next: any) => {
   try {
-    const { user, error } = await verifySupabaseToken(token)
-
-    if (error || !user) {
-      return c.json({ error: 'Unauthorized - Invalid token' }, 401)
-    }
-
-    // Store user in context
-    c.set('user', user)
-
     // Use app access token for Twitch API calls
-    // VOD data is public, so we don't need user-specific tokens
     const appToken = await getAppAccessToken()
     c.set('twitchClient', new TwitchClient(appToken))
-
     await next()
   } catch (err) {
-    console.error('Auth middleware error:', err)
-    return c.json({ error: 'Authentication failed' }, 401)
+    console.error('Twitch client setup error:', err)
+    return c.json({ error: 'Failed to connect to Twitch' }, 500)
   }
 }
 
+// Apply middleware to all routes
+vodsRoutes.use('*', requireAuth, setupTwitchClient)
+
 // Get VODs for the authenticated user
-vodsRoutes.get('/mine', requireAuth, async (c) => {
+vodsRoutes.get('/mine', async (c) => {
   const client = c.get('twitchClient') as TwitchClient
 
   try {
@@ -115,7 +101,7 @@ vodsRoutes.get('/mine', requireAuth, async (c) => {
 })
 
 // Get VODs for any channel by login
-vodsRoutes.get('/channel/:login', requireAuth, zValidator('param', z.object({
+vodsRoutes.get('/channel/:login', zValidator('param', z.object({
   login: z.string().min(1),
 })), async (c) => {
   const client = c.get('twitchClient') as TwitchClient
@@ -128,7 +114,7 @@ vodsRoutes.get('/channel/:login', requireAuth, zValidator('param', z.object({
       return c.json({ error: 'Channel not found' }, 404)
     }
 
-    const { data: videos, pagination} = await client.getVideos(user.id, {
+    const { data: videos, pagination } = await client.getVideos(user.id, {
       type: 'archive',
       first: 20,
     })
@@ -199,7 +185,7 @@ vodsRoutes.get('/channel/:login', requireAuth, zValidator('param', z.object({
 })
 
 // Get specific VOD details
-vodsRoutes.get('/:id', requireAuth, async (c) => {
+vodsRoutes.get('/:id', async (c) => {
   const client = c.get('twitchClient') as TwitchClient
   const videoId = c.req.param('id')
 
@@ -266,23 +252,23 @@ vodsRoutes.get('/:id', requireAuth, async (c) => {
 })
 
 // Get existing Twitch clips for a channel (for training data / comparison)
-vodsRoutes.get('/channel/:login/clips', requireAuth, async (c) => {
+vodsRoutes.get('/channel/:login/clips', async (c) => {
   const client = c.get('twitchClient') as TwitchClient
   const { login } = c.req.param()
-  
+
   try {
     const user = await client.getUserByLogin(login)
-    
+
     if (!user) {
       return c.json({ error: 'Channel not found' }, 404)
     }
-    
+
     const { data: clips, pagination } = await client.getClips(user.id, {
       first: 50,
     })
-    
+
     return c.json({ clips, pagination })
-    
+
   } catch (err) {
     console.error('Failed to fetch clips:', err)
     return c.json({ error: 'Failed to fetch clips' }, 500)

@@ -35,7 +35,7 @@ export interface PipelineContext {
   // Extracted clips
   clipPaths?: string[]
   clipIds?: string[]
-  extractedClips?: Array<{ path: string; startTime: number; endTime: number; clipId?: string }>
+  extractedClips?: Array<{ id?: string; path: string; startTime: number; endTime: number; clipId?: string; thumbnailPath?: string; moment?: SignalMoment }>
   extractedClipsDir?: string
   reframedClips?: Array<{ path: string; originalPath: string; clipId?: string }>
   reframedClipsDir?: string
@@ -65,6 +65,9 @@ export interface PipelineContext {
 
   // Custom data for stages to share state
   metadata?: Record<string, any>
+
+  // Helper for stages to report progress
+  reportProgress?: (percent: number, message: string) => Promise<void> | void
 }
 
 export interface PipelineStage {

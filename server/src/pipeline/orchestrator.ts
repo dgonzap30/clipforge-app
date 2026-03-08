@@ -10,7 +10,7 @@ import type { ProcessingJob, JobStatus } from '../routes/jobs'
 import { createDownloadStage } from './stages/download'
 import { analyze } from './stages/analyze'
 import { createExtractStage } from './stages/extract'
-import { reframeStage } from './stages/reframe'
+import { createReframeStage } from './stages/reframe'
 import { effectsStage } from './stages/effects'
 import { captionStage } from './stages/caption'
 import { brollStage } from './stages/broll'
@@ -33,71 +33,6 @@ function convertTwitchClipsToViewerClips(twitchClips: TwitchClip[]): ViewerClip[
       viewCount: clip.view_count,
       title: clip.title,
     }))
-}
-
-// Wrap analyze function in a PipelineStage
-const analyzeStageWrapper: PipelineStage = {
-  name: 'analyze',
-  async execute(context: PipelineContext): Promise<PipelineContext> {
-    if (!context.downloadedVideoPath) {
-      throw new Error('Downloaded video path is required for analysis')
-    }
-
-    // Fetch viewer clips from Twitch if we have a VOD ID
-    let viewerClips: ViewerClip[] = []
-    if (context.metadata?.twitchVodId) {
-      try {
-        console.log(`[orchestrator] Fetching viewer clips for VOD ${context.metadata.twitchVodId}`)
-        const appToken = await getAppAccessToken()
-        const twitchClient = new TwitchClient(appToken)
-        const twitchClips = await twitchClient.getClipsForVOD(context.metadata.twitchVodId)
-        viewerClips = convertTwitchClipsToViewerClips(twitchClips)
-        console.log(`[orchestrator] Found ${viewerClips.length} viewer clips for VOD`)
-      } catch (error) {
-        console.warn(`[orchestrator] Failed to fetch viewer clips:`, error)
-        // Continue without viewer clips if fetch fails
-      }
-    }
-
-    // Get signal weights and configuration from job settings
-    const settings = context.settings || {}
-    const weights = {
-      chat: settings.chatAnalysis ? 0.4 : 0,
-      audio: settings.audioPeaks ? 0.4 : 0.8, // Higher weight if chat disabled
-      clips: 0.2,
-    }
-
-    // Map sensitivity to minScore threshold
-    const sensitivityToMinScore: Record<string, number> = {
-      'low': 50,    // Only high-confidence moments
-      'medium': 30, // Default balance
-      'high': 15,   // More permissive, catch more moments
-    }
-
-    const fusionConfig = {
-      weights,
-      minScore: sensitivityToMinScore[settings.sensitivity || 'medium'],
-      minDuration: settings.minDuration || 10,
-      maxDuration: settings.maxDuration || 60,
-    }
-
-    const result = await analyze(
-      {
-        videoPath: context.downloadedVideoPath,
-        vodId: context.vodId,
-        chatMoments: [],
-        viewerClips,
-      },
-      fusionConfig
-    )
-
-    return {
-      ...context,
-      extractedAudioPath: result.audioPath,
-      moments: result.fusedMoments,
-      tempFiles: [...context.tempFiles, result.audioPath],
-    }
-  },
 }
 
 // Wrap caption function in a PipelineStage
@@ -252,17 +187,89 @@ const brollStageWrapper: PipelineStage = {
   },
 }
 
-// Pipeline stages in order
-const PIPELINE_STAGES: PipelineStage[] = [
-  createDownloadStage(),
-  analyzeStageWrapper,
-  createExtractStage(),
-  reframeStage,
-  effectsStage,
-  captionStageWrapper,
-  brollStageWrapper,
-  createUploadStage(),
-]
+// WRAPPER FACTORIES
+
+// Analyze Stage Factory
+function createAnalyzeStageWrapper(config: PipelineConfig): PipelineStage {
+  return {
+    name: 'analyze',
+    async execute(context: PipelineContext): Promise<PipelineContext> {
+      if (!context.downloadedVideoPath) {
+        throw new Error('Downloaded video path is required for analysis')
+      }
+
+      // Fetch viewer clips logic... (keeping existing logic)
+      let viewerClips: ViewerClip[] = []
+      if (context.metadata?.twitchVodId) {
+        try {
+          // ... existing fetch logic
+          const appToken = await getAppAccessToken()
+          const twitchClient = new TwitchClient(appToken)
+          const twitchClips = await twitchClient.getClipsForVOD(context.metadata.twitchVodId)
+          viewerClips = convertTwitchClipsToViewerClips(twitchClips)
+        } catch (error) {
+          console.warn(`[orchestrator] Failed to fetch viewer clips:`, error)
+        }
+      }
+
+      const settings = context.settings || {}
+      const weights = {
+        chat: settings.chatAnalysis ? 0.4 : 0,
+        audio: settings.audioPeaks ? 0.4 : 0.8,
+        clips: 0.2,
+        visual: settings.faceReactions ? 0.2 : 0,
+        transcript: 0,
+      }
+
+      const sensitivityToMinScore: Record<string, number> = {
+        'low': 50, 'medium': 30, 'high': 15,
+      }
+
+      const fusionConfig = {
+        weights,
+        minScore: sensitivityToMinScore[settings.sensitivity || 'medium'],
+        minDuration: settings.minDuration || 10,
+        maxDuration: settings.maxDuration || 60,
+        onProgress: async (percent: number, message: string) => {
+          if (config.progressCallback && context.jobId) {
+            await config.progressCallback(context.jobId, 'analyzing', percent, message)
+          }
+        }
+      }
+
+      const result = await analyze(
+        {
+          videoPath: context.downloadedVideoPath,
+          vodId: context.vodId,
+          chatMoments: [],
+          viewerClips,
+        },
+        fusionConfig
+      )
+
+      return {
+        ...context,
+        extractedAudioPath: result.audioPath,
+        moments: result.fusedMoments,
+        tempFiles: [...context.tempFiles, result.audioPath],
+      }
+    },
+  }
+}
+
+// Pipeline stages factory - creates stages with config
+function createPipelineStages(config: PipelineConfig): PipelineStage[] {
+  return [
+    createDownloadStage({ onProgress: config.progressCallback }),
+    createAnalyzeStageWrapper(config),
+    createExtractStage(),
+    createReframeStage(),
+    effectsStage,
+    captionStageWrapper,
+    brollStageWrapper,
+    createUploadStage(),
+  ]
+}
 
 // Map stage names to job statuses
 const STAGE_TO_STATUS: Record<string, JobStatus> = {
@@ -321,8 +328,11 @@ export async function runPipeline(
   try {
     console.log(`[orchestrator] Starting pipeline for job ${job.id}`)
 
+    // Create pipeline stages with config
+    const pipelineStages = createPipelineStages(cfg)
+
     // Execute each stage in sequence
-    for (const stage of PIPELINE_STAGES) {
+    for (const stage of pipelineStages) {
       await executeStageWithRetry(context, stage, cfg)
     }
 
@@ -378,6 +388,13 @@ async function executeStageWithRetry(
       context.progress!,
       `Starting ${stage.name}...`
     )
+  }
+
+  // Inject reportProgress helper into context
+  context.reportProgress = async (percent: number, message: string) => {
+    if (config.progressCallback && context.jobId) {
+      await config.progressCallback(context.jobId, status, percent, message)
+    }
   }
 
   try {
@@ -485,15 +502,25 @@ export async function resumePipeline(
   fromStage: string,
   config: Partial<PipelineConfig> = {}
 ): Promise<void> {
+  const cfg: PipelineConfig = {
+    maxRetries: config.maxRetries ?? 0,
+    retryDelay: config.retryDelay ?? 0,
+    cleanupOnFailure: config.cleanupOnFailure ?? true,
+    progressCallback: config.progressCallback,
+  }
+
+  // Create pipeline stages with config
+  const pipelineStages = createPipelineStages(cfg)
+
   // Find stage index
-  const stageIndex = PIPELINE_STAGES.findIndex(s => s.name === fromStage)
+  const stageIndex = pipelineStages.findIndex(s => s.name === fromStage)
 
   if (stageIndex === -1) {
     throw new Error(`Invalid stage name: ${fromStage}`)
   }
 
   // Create a modified pipeline starting from the specified stage
-  const resumeStages = PIPELINE_STAGES.slice(stageIndex)
+  const resumeStages = pipelineStages.slice(stageIndex)
 
   console.log(`[orchestrator] Resuming pipeline from stage: ${fromStage}`)
 
@@ -521,13 +548,6 @@ export async function resumePipeline(
   }
 
   // Execute remaining stages
-  const cfg: PipelineConfig = {
-    maxRetries: config.maxRetries ?? 0, // Retries handled by BullMQ, not orchestrator
-    retryDelay: config.retryDelay ?? 0,
-    cleanupOnFailure: config.cleanupOnFailure ?? true,
-    progressCallback: config.progressCallback,
-  }
-
   try {
     for (const stage of resumeStages) {
       await executeStageWithRetry(context, stage, cfg)

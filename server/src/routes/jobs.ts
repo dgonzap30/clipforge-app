@@ -10,7 +10,7 @@ export const jobsRoutes = new Hono()
 jobsRoutes.use('*', requireAuth)
 
 // Job types
-export type JobStatus = 'queued' | 'downloading' | 'analyzing' | 'extracting' | 'reframing' | 'captioning' | 'completed' | 'failed'
+export type JobStatus = 'queued' | 'downloading' | 'analyzing' | 'extracting' | 'reframing' | 'processing' | 'captioning' | 'completed' | 'failed'
 
 export interface ProcessingJob {
   id: string
@@ -242,7 +242,7 @@ jobsRoutes.post('/', zValidator('json', createJobSchema), async (c) => {
 
 // Update job status (called by worker)
 jobsRoutes.patch('/:id', zValidator('json', z.object({
-  status: z.enum(['queued', 'downloading', 'analyzing', 'extracting', 'reframing', 'captioning', 'completed', 'failed']).optional(),
+  status: z.enum(['queued', 'downloading', 'analyzing', 'extracting', 'reframing', 'processing', 'captioning', 'completed', 'failed']).optional(),
   progress: z.number().min(0).max(100).optional(),
   currentStep: z.string().optional(),
   clipsFound: z.number().optional(),
@@ -380,7 +380,18 @@ jobsRoutes.post('/:id/retry', async (c) => {
   const job = existingJob as JobRow
 
   if (job.status !== 'failed') {
-    return c.json({ error: 'Can only retry failed jobs' }, 400)
+    // Check if the job is "stuck" (not updated in > 5 minutes)
+    const lastUpdate = new Date(job.updated_at).getTime()
+    const now = new Date().getTime()
+    const fiveMinutes = 5 * 60 * 1000
+
+    if (now - lastUpdate > fiveMinutes) {
+      console.log(`[Jobs] Force-retrying stuck job ${id} (status: ${job.status}, last update: ${job.updated_at})`)
+      // Allow it to proceed
+    } else {
+      console.log(`[Jobs] Failed to retry job ${id}. Current status: '${job.status}' (expected 'failed')`)
+      return c.json({ error: `Can only retry failed jobs. Current status: ${job.status}` }, 400)
+    }
   }
 
   const { data, error } = await supabase
@@ -429,6 +440,82 @@ jobsRoutes.post('/:id/retry', async (c) => {
       .eq('id', id)
 
     return c.json({ error: 'Failed to re-queue job for processing' }, 500)
+  }
+
+  return c.json(rowToJob(data as JobRow))
+})
+
+// Prioritize job (move to front of queue)
+jobsRoutes.post('/:id/prioritize', async (c) => {
+  const userId = c.get('userId')
+  const id = c.req.param('id')
+
+  // Check if job exists and belongs to user
+  const { data: existingJob } = await supabase
+    .from('jobs')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .single()
+
+  if (!existingJob) {
+    return c.json({ error: 'Job not found' }, 404)
+  }
+
+  const job = existingJob as JobRow
+
+  // Can only prioritize queued jobs
+  if (job.status !== 'queued') {
+    return c.json({ error: 'Can only prioritize queued jobs' }, 400)
+  }
+
+  // Update the job's current_step to indicate prioritization
+  const { data, error } = await supabase
+    .from('jobs')
+    .update({
+      current_step: 'Priority queue...',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('user_id', userId)
+    .select()
+    .single()
+
+  if (error || !data) {
+    console.error('Error prioritizing job:', error)
+    return c.json({ error: 'Failed to prioritize job' }, 500)
+  }
+
+  // Remove from BullMQ and re-add with highest priority
+  try {
+    const { processingQueue } = await import('../queue/processingQueue')
+
+    // Find and remove the existing BullMQ job
+    const jobs = await processingQueue.getJobs(['waiting', 'delayed', 'paused'])
+    const bullmqJob = jobs.find(j => j.data.jobId === id)
+
+    if (bullmqJob) {
+      await bullmqJob.remove()
+      console.log(`[jobs] Removed BullMQ job ${id} for prioritization`)
+    }
+
+    // Re-add with highest priority (priority: 1)
+    await processingQueue.add('process-vod', {
+      jobId: id,
+      vodId: job.vod_id,
+      vodUrl: job.vod_url,
+      title: job.title,
+      channelLogin: job.channel_login,
+      duration: job.vod_duration,
+      settings: job.settings,
+    }, {
+      priority: 1, // Highest priority
+    })
+
+    console.log(`[jobs] Prioritized job ${id} - moved to front of queue`)
+  } catch (bullmqError) {
+    console.error('[jobs] Failed to prioritize job in BullMQ:', bullmqError)
+    return c.json({ error: 'Failed to prioritize job in queue' }, 500)
   }
 
   return c.json(rowToJob(data as JobRow))

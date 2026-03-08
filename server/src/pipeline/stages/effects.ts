@@ -8,7 +8,7 @@
  */
 
 import type { PipelineContext, PipelineStage, TransitionType } from '../types'
-import type { AudioMoment } from '../../analysis/audio'
+import { SignalMoment } from '../../analysis/fusion'
 import type { CropKeyframe } from '../../extraction/reframe'
 import { concatenateClipsWithTransitions, TransitionOptions } from '../../extraction/clipper'
 import { $ } from 'bun'
@@ -52,7 +52,7 @@ const DEFAULT_ZOOM_HOLD = 1.0
 export class EffectsStage implements PipelineStage {
   name = 'effects'
 
-  constructor(private config: EffectsStageConfig = {}) {}
+  constructor(private config: EffectsStageConfig = {}) { }
 
   async execute(context: PipelineContext): Promise<PipelineContext> {
     const { outputDir, captionedClips, reframedClips } = context
@@ -252,7 +252,7 @@ export const effectsStage: PipelineStage = {
 async function applyAutoZoom(config: {
   inputPath: string
   outputPath: string
-  moments: AudioMoment[]
+  moments: SignalMoment[]
   clipStartTime: number
   maxZoom: number
   faceKeyframes?: CropKeyframe[]
@@ -292,7 +292,7 @@ async function applyAutoZoom(config: {
  * Generate zoom keyframes from audio moments
  */
 function generateZoomKeyframes(
-  moments: AudioMoment[],
+  moments: SignalMoment[],
   clipStartTime: number,
   maxZoom: number,
   faceKeyframes?: CropKeyframe[],
@@ -301,8 +301,10 @@ function generateZoomKeyframes(
 ): ZoomKeyframe[] {
   const keyframes: ZoomKeyframe[] = []
 
-  // Filter moments that should trigger zoom (peaks and sustained)
-  const zoomMoments = moments.filter(m => m.type === 'peak' || m.type === 'sustained')
+  const zoomMoments = moments.filter(m => {
+    const audio = m.signals?.audio as any
+    return audio && (audio.type === 'peak' || audio.type === 'sustained')
+  })
 
   for (const moment of zoomMoments) {
     // Convert absolute timestamp to clip-relative time
@@ -529,10 +531,10 @@ function buildFacePositionExpression(keyframes: ZoomKeyframe[], axis: 'x' | 'y')
  * Filter audio moments that occur during a specific clip
  */
 function filterMomentsForClip(
-  moments: AudioMoment[],
+  moments: SignalMoment[],
   clipStartTime: number,
   clipDuration: number
-): AudioMoment[] {
+): SignalMoment[] {
   const clipEndTime = clipStartTime + clipDuration
 
   return moments.filter(moment =>

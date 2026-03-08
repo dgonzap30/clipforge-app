@@ -277,4 +277,11 @@ export const clips = {
   async delete(path: string): Promise<{ success: boolean; error?: string }> {
     return deleteFile(BUCKETS.CLIPS, path)
   },
+
+  /**
+   * Download a clip from storage
+   */
+  async download(path: string): Promise<DownloadResult> {
+    return download({ bucket: BUCKETS.CLIPS, path })
+  },
 }

@@ -14,7 +14,7 @@ export interface ExtractStageConfig {
   quality?: 'high' | 'medium' | 'low'
   preRoll?: number
   postRoll?: number
-  onProgress?: (completed: number, total: number) => void
+  onProgress?: (percent: number, message: string) => void
 }
 
 /**
@@ -23,11 +23,16 @@ export interface ExtractStageConfig {
 export class ExtractStage implements PipelineStage {
   name = 'extract'
 
-  constructor(private config: ExtractStageConfig = {}) {}
+  constructor(private config: ExtractStageConfig = {}) { }
 
   async execute(context: PipelineContext): Promise<PipelineContext> {
     const { jobId, userId, vodId, outputDir, moments } = context
     const vodPath = context.downloadedVideoPath || context.vodPath
+
+    // Update progress reporter to use context if available
+    const reporter = context.reportProgress
+      ? (percent: number, message: string) => context.reportProgress!(percent, message)
+      : (this.config.onProgress ? (percent: number, message: string) => this.config.onProgress!(percent, message) : undefined)
 
     // Validate required context
     if (!vodPath) {
@@ -62,7 +67,12 @@ export class ExtractStage implements PipelineStage {
       {
         maxConcurrent: this.config.maxConcurrent || 2,
         quality: this.config.quality || 'medium',
-        onProgress: this.config.onProgress,
+        onProgress: reporter
+          ? (completed: number, total: number) => {
+            const percent = Math.round((completed / total) * 100)
+            reporter(percent, `Extracted ${completed}/${total} clips`)
+          }
+          : undefined,
       }
     )
 

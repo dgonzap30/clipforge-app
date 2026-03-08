@@ -452,14 +452,14 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
             continue
           }
 
-          const signedUrl = await clipsStorage.getSignedUrl(clip.video_path)
-          if (!signedUrl) {
+          const signedUrlResult = await clipsStorage.getSignedUrl(clip.video_path)
+          if (!signedUrlResult || !signedUrlResult.success || !signedUrlResult.url) {
             errors.push({ clipId: clip.id, error: 'Failed to get video URL' })
             continue
           }
 
           // Download file to temp location
-          const response = await fetch(signedUrl)
+          const response = await fetch(signedUrlResult.url)
           if (!response.ok) {
             errors.push({ clipId: clip.id, error: 'Failed to download video' })
             continue
@@ -589,11 +589,12 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
           }
 
           // Download video from storage
-          const videoBlob = await clipsStorage.download(clip.video_path)
-          if (!videoBlob) {
+          const downloadResult = await clipsStorage.download(clip.video_path)
+          if (!downloadResult.success || !downloadResult.data) {
             errors.push({ clipId: clip.id, error: 'Failed to download video' })
             continue
           }
+          const videoBlob = downloadResult.data
 
           // Save video to temporary file
           const fs = await import('fs/promises')
@@ -659,11 +660,6 @@ clipsRoutes.post('/bulk/export', zValidator('json', z.object({
       errors: errors.length > 0 ? errors : undefined,
       message: `Successfully exported ${exported.length} clips to ${platform}`
     })
-  } catch (error: Error | unknown) {
-    console.error('Unexpected error bulk exporting clips:', error)
-    return c.json({ error: 'Internal server error' }, 500)
-  }
-})
   } catch (error: Error | unknown) {
     console.error('Unexpected error bulk exporting clips:', error)
     return c.json({ error: 'Internal server error' }, 500)

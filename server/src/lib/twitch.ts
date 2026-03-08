@@ -73,7 +73,7 @@ export function getAuthorizationUrl(state: string): string {
     scope: 'user:read:email clips:edit',
     state,
   })
-  
+
   return `${TWITCH_AUTH_BASE}/authorize?${params}`
 }
 
@@ -92,12 +92,12 @@ export async function exchangeCodeForTokens(code: string): Promise<TwitchTokenRe
       redirect_uri: env.TWITCH_REDIRECT_URI,
     }),
   })
-  
+
   if (!response.ok) {
     const error = await response.text()
     throw new Error(`Token exchange failed: ${error}`)
   }
-  
+
   return response.json()
 }
 
@@ -115,12 +115,12 @@ export async function refreshAccessToken(refreshToken: string): Promise<TwitchTo
       grant_type: 'refresh_token',
     }),
   })
-  
+
   if (!response.ok) {
     const error = await response.text()
     throw new Error(`Token refresh failed: ${error}`)
   }
-  
+
   return response.json()
 }
 
@@ -168,17 +168,17 @@ export async function getAppAccessToken(): Promise<string> {
   // Set expiry 1 hour before actual expiry as buffer
   appTokenExpiry = Date.now() + (data.expires_in - 3600) * 1000
 
-  return appAccessToken
+  return appAccessToken as string
 }
 
 // API client class
 export class TwitchClient {
   private accessToken: string
-  
+
   constructor(accessToken: string) {
     this.accessToken = accessToken
   }
-  
+
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const response = await fetch(`${TWITCH_API_BASE}${endpoint}`, {
       ...options,
@@ -188,21 +188,21 @@ export class TwitchClient {
         ...options.headers,
       },
     })
-    
+
     if (!response.ok) {
       const error = await response.text()
       throw new Error(`Twitch API error: ${response.status} - ${error}`)
     }
-    
+
     return response.json()
   }
-  
+
   // Get current user
   async getUser(): Promise<TwitchUser> {
     const data = await this.request<{ data: TwitchUser[] }>('/users')
     return data.data[0]
   }
-  
+
   // Get user by ID or login
   async getUserByLogin(login: string): Promise<TwitchUser> {
     const data = await this.request<{ data: TwitchUser[] }>(`/users?login=${login}`)
@@ -211,7 +211,7 @@ export class TwitchClient {
     }
     return data.data[0]
   }
-  
+
   // Get VODs for a user
   async getVideos(userId: string, options: {
     type?: 'all' | 'upload' | 'archive' | 'highlight'
@@ -223,20 +223,20 @@ export class TwitchClient {
       type: options.type || 'archive',
       first: String(options.first || 20),
     })
-    
+
     if (options.after) {
       params.set('after', options.after)
     }
-    
+
     return this.request(`/videos?${params}`)
   }
-  
+
   // Get specific video by ID
   async getVideo(videoId: string): Promise<TwitchVideo | null> {
     const data = await this.request<{ data: TwitchVideo[] }>(`/videos?id=${videoId}`)
     return data.data[0] || null
   }
-  
+
   // Get clips for a broadcaster
   async getClips(broadcasterId: string, options: {
     first?: number
@@ -302,13 +302,13 @@ export class TwitchClient {
 export function parseTwitchDuration(duration: string): number {
   const regex = /(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/
   const match = duration.match(regex)
-  
+
   if (!match) return 0
-  
+
   const hours = parseInt(match[1] || '0', 10)
   const minutes = parseInt(match[2] || '0', 10)
   const seconds = parseInt(match[3] || '0', 10)
-  
+
   return hours * 3600 + minutes * 60 + seconds
 }
 
@@ -317,11 +317,11 @@ export function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
   const s = seconds % 60
-  
+
   let result = ''
   if (h > 0) result += `${h}h`
   if (m > 0) result += `${m}m`
   if (s > 0 || result === '') result += `${s}s`
-  
+
   return result
 }

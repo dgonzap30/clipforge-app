@@ -219,7 +219,7 @@ async function analyzeWithClaude(
 /**
  * Validate and normalize suggestions
  */
-function validateSuggestions(suggestions: unknown[]): BRollSuggestion[] {
+function validateSuggestions(suggestions: any[]): BRollSuggestion[] {
   if (!Array.isArray(suggestions)) {
     return []
   }
@@ -228,6 +228,7 @@ function validateSuggestions(suggestions: unknown[]): BRollSuggestion[] {
     .filter(s => {
       return (
         typeof s === 'object' &&
+        s !== null &&
         typeof s.timestamp === 'number' &&
         typeof s.duration === 'number' &&
         typeof s.searchQuery === 'string' &&

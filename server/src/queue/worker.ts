@@ -85,7 +85,7 @@ export const vodWorker = new Worker<VodProcessingJobData>(
   },
   {
     connection: redisConnection,
-    concurrency: 1, // Process one job at a time
+    concurrency: 2, // Process two jobs at a time
     removeOnComplete: { count: 100 },
     removeOnFail: { count: 100 },
   }
