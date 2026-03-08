@@ -69,7 +69,7 @@ clipforge/
 
 ## Next Steps
 
-See `BUILD_PLAN.md` for the development roadmap.
+See `tasks/todo.md` for the release checklist and `docs/timeline-to-release.html` for the visual timeline.
 
 ---
 

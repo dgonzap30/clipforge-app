@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClipForge — Timeline to Release</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ========== RESET & BASE ========== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --forge-50: #fef3f2;
+    --forge-100: #fee4e2;
+    --forge-200: #ffcdc9;
+    --forge-300: #fda4a0;
+    --forge-400: #f97066;
+    --forge-500: #f04438;
+    --forge-600: #de3024;
+    --forge-700: #bb241a;
+    --forge-800: #9a2319;
+    --forge-900: #80241c;
+    --forge-950: #450f0a;
+
+    --dark-50: #f6f6f7;
+    --dark-100: #e2e3e5;
+    --dark-200: #c4c5ca;
+    --dark-300: #9fa1a8;
+    --dark-400: #7b7d86;
+    --dark-500: #60626b;
+    --dark-600: #4c4d55;
+    --dark-700: #3f4046;
+    --dark-800: #35363a;
+    --dark-900: #1e1f23;
+    --dark-950: #121316;
+
+    --border-subtle: rgba(255,255,255,0.08);
+    --border-default: rgba(255,255,255,0.12);
+    --border-bright: rgba(255,255,255,0.18);
+
+    --text-primary: #ffffff;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #71717a;
+
+    --shadow-red: 0 4px 24px rgba(240,68,56,0.15);
+    --shadow-red-lg: 0 8px 40px rgba(240,68,56,0.20);
+    --shadow-red-xl: 0 12px 60px rgba(240,68,56,0.25);
+
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--dark-950);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ========== AMBIENT GLOW ========== */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 600px;
+    background: radial-gradient(ellipse, rgba(240,68,56,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ========== SCROLLBAR ========== */
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: var(--dark-900); }
+  ::-webkit-scrollbar-thumb { background: var(--dark-700); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--dark-600); }
+
+  /* ========== LAYOUT ========== */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  section {
+    padding: 80px 0;
+  }
+
+  section + section {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  /* ========== TYPOGRAPHY ========== */
+  h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.02em; }
+
+  h2 {
+    font-size: 2rem;
+    margin-bottom: 12px;
+  }
+
+  .section-subtitle {
+    color: var(--text-tertiary);
+    font-size: 0.95rem;
+    margin-bottom: 40px;
+    font-family: var(--font-mono);
+    font-weight: 400;
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, var(--forge-400), var(--forge-500), var(--forge-600));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+  }
+
+  /* ========== CARD ========== */
+  .card {
+    background: var(--dark-900);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 24px;
+    transition: all 0.2s ease;
+  }
+
+  .card:hover {
+    border-color: var(--border-bright);
+    box-shadow: var(--shadow-red);
+  }
+
+  .card-glow {
+    border-color: rgba(240,68,56,0.25);
+    box-shadow: var(--shadow-red);
+  }
+
+  .card-glow:hover {
+    box-shadow: var(--shadow-red-lg);
+  }
+
+  /* ========== TAG / BADGE ========== */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .tag-red {
+    background: rgba(240,68,56,0.15);
+    color: var(--forge-400);
+    border: 1px solid rgba(240,68,56,0.3);
+  }
+
+  .tag-green {
+    background: rgba(34,197,94,0.12);
+    color: #4ade80;
+    border: 1px solid rgba(34,197,94,0.25);
+  }
+
+  .tag-yellow {
+    background: rgba(234,179,8,0.12);
+    color: #facc15;
+    border: 1px solid rgba(234,179,8,0.25);
+  }
+
+  .tag-blue {
+    background: rgba(59,130,246,0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59,130,246,0.25);
+  }
+
+  .tag-gray {
+    background: rgba(255,255,255,0.06);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-default);
+  }
+
+  /* ========== HERO ========== */
+  .hero {
+    padding: 100px 0 80px;
+    text-align: center;
+    position: relative;
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 400px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--forge-500), transparent);
+  }
+
+  .hero-logo {
+    font-size: 4.5rem;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+
+  .hero-logo .clip {
+    color: var(--text-primary);
+  }
+
+  .hero-logo .forge {
+    background: linear-gradient(135deg, var(--forge-400) 0%, var(--forge-500) 50%, var(--forge-600) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    position: relative;
+  }
+
+  .hero-tagline {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    margin-bottom: 48px;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero-tagline code {
+    font-family: var(--font-mono);
+    color: var(--forge-400);
+    font-weight: 500;
+  }
+
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .hero-stat {
+    text-align: center;
+  }
+
+  .hero-stat-value {
+    font-size: 2rem;
+    font-weight: 800;
+    font-family: var(--font-mono);
+    background: linear-gradient(180deg, #fff 0%, var(--dark-200) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    margin-top: 4px;
+  }
+
+  /* ========== PIPELINE / CURRENT STATE ========== */
+  .pipeline-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .pipeline-card {
+    background: var(--dark-900);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .pipeline-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--forge-500), var(--forge-400));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .pipeline-card:hover::before {
+    opacity: 1;
+  }
+
+  .pipeline-icon {
+    font-size: 1.3rem;
+    margin-bottom: 8px;
+  }
+
+  .pipeline-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .pipeline-desc {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    line-height: 1.4;
+  }
+
+  /* ========== BLOCKING ========== */
+  .blocking-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 700px) {
+    .blocking-grid { grid-template-columns: 1fr; }
+  }
+
+  .blocking-item {
+    background: var(--dark-900);
+    border: 1px solid rgba(240,68,56,0.2);
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+  }
+
+  .blocking-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--forge-500);
+    border-radius: 3px 0 0 3px;
+  }
+
+  .blocking-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--forge-400);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .blocking-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .blocking-detail {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+  }
+
+  /* ========== GANTT ========== */
+  .gantt-wrapper {
+    overflow-x: auto;
+    padding-bottom: 12px;
+  }
+
+  .gantt {
+    min-width: 700px;
+  }
+
+  .gantt-header {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 16px;
+    margin-bottom: 8px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .gantt-weeks {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0;
+  }
+
+  .gantt-week-label {
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    text-align: center;
+    padding: 4px 0;
+  }
+
+  .gantt-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 16px;
+    align-items: center;
+    padding: 8px 0;
+  }
+
+  .gantt-row + .gantt-row {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .gantt-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .gantt-bar-track {
+    display: grid;
+    grid-template-columns: repeat(42, 1fr);
+    gap: 0;
+    height: 32px;
+    position: relative;
+  }
+
+  .gantt-bar {
+    border-radius: 6px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .gantt-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+    border-radius: 6px;
+  }
+
+  .bar-s1 {
+    grid-column: 1 / 8;
+    background: linear-gradient(90deg, var(--forge-500), var(--forge-600));
+    box-shadow: 0 2px 12px rgba(240,68,56,0.3);
+  }
+
+  .bar-s2 {
+    grid-column: 8 / 15;
+    background: linear-gradient(90deg, var(--forge-600), var(--forge-700));
+    box-shadow: 0 2px 12px rgba(222,48,36,0.25);
+  }
+
+  .bar-s3 {
+    grid-column: 15 / 26;
+    background: linear-gradient(90deg, var(--forge-700), var(--forge-800));
+    box-shadow: 0 2px 12px rgba(187,36,26,0.2);
+  }
+
+  .bar-s4 {
+    grid-column: 26 / 38;
+    background: linear-gradient(90deg, var(--forge-800), var(--forge-900));
+    box-shadow: 0 2px 12px rgba(154,35,25,0.2);
+  }
+
+  /* Today marker */
+  .gantt-today {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 2px;
+    background: var(--forge-400);
+    box-shadow: 0 0 8px var(--forge-400);
+    z-index: 5;
+    left: 0; /* Day 0 of the 42-day track = Mar 8, before S1 starts */
+  }
+
+  .gantt-today::before {
+    content: 'NOW';
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.6rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--forge-400);
+    letter-spacing: 0.1em;
+  }
+
+  /* ========== SPRINT DETAILS ========== */
+  .sprint-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.85rem;
+  }
+
+  .sprint-table thead th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--dark-900);
+  }
+
+  .sprint-table thead th:first-child {
+    border-radius: 10px 0 0 0;
+  }
+
+  .sprint-table thead th:last-child {
+    border-radius: 0 10px 0 0;
+  }
+
+  .sprint-table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: top;
+  }
+
+  .sprint-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .sprint-table tbody tr:hover td {
+    background: rgba(255,255,255,0.02);
+  }
+
+  .sprint-name {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .sprint-dates {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  .sprint-goal {
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .sprint-deliverable {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+  }
+
+  /* ========== MILESTONES ========== */
+  .milestones {
+    position: relative;
+    padding-left: 32px;
+  }
+
+  .milestones::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 11px;
+    width: 2px;
+    background: linear-gradient(180deg, var(--forge-500), var(--forge-800), var(--dark-700));
+  }
+
+  .milestone {
+    position: relative;
+    padding: 0 0 40px;
+  }
+
+  .milestone:last-child {
+    padding-bottom: 0;
+  }
+
+  .milestone-dot {
+    position: absolute;
+    left: -27px;
+    top: 4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--forge-500);
+    background: var(--dark-950);
+  }
+
+  .milestone-dot.active {
+    background: var(--forge-500);
+    box-shadow: 0 0 12px rgba(240,68,56,0.5);
+  }
+
+  .milestone-date {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--forge-400);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .milestone-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .milestone-desc {
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+  }
+
+  /* ========== ROADMAP ========== */
+  .roadmap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .roadmap-card {
+    background: var(--dark-900);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .roadmap-card:hover {
+    border-color: var(--border-bright);
+  }
+
+  .roadmap-quarter {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--forge-400);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  .roadmap-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .roadmap-items {
+    list-style: none;
+  }
+
+  .roadmap-items li {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    padding: 3px 0;
+    padding-left: 16px;
+    position: relative;
+  }
+
+  .roadmap-items li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--dark-600);
+  }
+
+  /* ========== TECH STACK ========== */
+  .stack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  .stack-item {
+    background: var(--dark-900);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    transition: all 0.2s;
+  }
+
+  .stack-item:hover {
+    border-color: var(--border-bright);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-red);
+  }
+
+  .stack-icon {
+    font-size: 1.5rem;
+    margin-bottom: 8px;
+  }
+
+  .stack-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .stack-role {
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+  }
+
+  /* ========== DOCS TABLE ========== */
+  .docs-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.85rem;
+    background: var(--dark-900);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border-default);
+  }
+
+  .docs-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  .docs-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .docs-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .docs-table code {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--forge-400);
+    background: rgba(240,68,56,0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .docs-table .desc {
+    color: var(--text-secondary);
+  }
+
+  /* ========== FOOTER ========== */
+  .footer {
+    padding: 40px 0;
+    text-align: center;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .footer-text {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+  }
+
+  .footer-text a {
+    color: var(--forge-400);
+    text-decoration: none;
+  }
+
+  .footer-text a:hover {
+    text-decoration: underline;
+  }
+
+  /* ========== NAV ========== */
+  .nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(18,19,22,0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0 24px;
+  }
+
+  .nav-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+  }
+
+  .nav-brand {
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: -0.03em;
+  }
+
+  .nav-brand .forge-mark {
+    color: var(--forge-500);
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 24px;
+  }
+
+  .nav-links a {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.15s;
+  }
+
+  .nav-links a:hover {
+    color: var(--text-primary);
+  }
+
+  @media (max-width: 640px) {
+    .nav-links { display: none; }
+    .hero-stats { grid-template-columns: repeat(2, 1fr); }
+    .hero-logo { font-size: 3rem; }
+    h2 { font-size: 1.5rem; }
+    .blocking-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ========== PULSE ANIMATION ========== */
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 8px rgba(240,68,56,0.4); }
+    50% { box-shadow: 0 0 20px rgba(240,68,56,0.7); }
+  }
+
+  .milestone-dot.active {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* ========== FEATURE COUNTERS ========== */
+  .feature-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    background: rgba(240,68,56,0.15);
+    color: var(--forge-400);
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="nav-brand">Clip<span class="forge-mark">Forge</span></div>
+    <div class="nav-links">
+      <a href="#state">Current State</a>
+      <a href="#blocking">Blockers</a>
+      <a href="#timeline">Timeline</a>
+      <a href="#sprints">Sprints</a>
+      <a href="#milestones">Milestones</a>
+      <a href="#stack">Stack</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero container" style="padding-top: 130px;">
+  <div class="hero-logo">
+    <span class="clip">Clip</span><span class="forge">Forge</span>
+  </div>
+  <p class="hero-tagline">
+    <code>VODs &rarr; Viral clips</code>, automated.
+    <br>Twitch stream clipper &amp; short-form content optimizer.
+  </p>
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="hero-stat-value">149</div>
+      <div class="hero-stat-label">Commits</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-value">19</div>
+      <div class="hero-stat-label">Features</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-value">6</div>
+      <div class="hero-stat-label">Pipeline Stages</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-value">3</div>
+      <div class="hero-stat-label">Platforms</div>
+    </div>
+  </div>
+</section>
+
+<!-- CURRENT STATE -->
+<section id="state" class="container">
+  <h2>Pipeline <span class="text-gradient">Features</span></h2>
+  <p class="section-subtitle">// what's built and wired</p>
+
+  <div class="pipeline-grid">
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F4AC;</div>
+      <div class="pipeline-title">Chat Analysis</div>
+      <div class="pipeline-desc">Twitch chat velocity, emote-weighted scoring, 30+ emotes tracked</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F50A;</div>
+      <div class="pipeline-title">Audio Peaks</div>
+      <div class="pipeline-desc">FFmpeg volume extraction, peak detection, adaptive thresholds</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F9E0;</div>
+      <div class="pipeline-title">Signal Fusion</div>
+      <div class="pipeline-desc">6-signal scoring: audio, chat, clips, transcript, visual, hooks</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F464;</div>
+      <div class="pipeline-title">Face Tracking</div>
+      <div class="pipeline-desc">MediaPipe detection, multi-face IOU tracking, speaker priority</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F4F1;</div>
+      <div class="pipeline-title">Smart Reframing</div>
+      <div class="pipeline-desc">9:16, 1:1, 4:5 aspect ratios. Face-aware crop with split-screen</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F4DD;</div>
+      <div class="pipeline-title">Captions</div>
+      <div class="pipeline-desc">Whisper transcription, 5 style presets, bounce/glow/fade animations</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F50D;</div>
+      <div class="pipeline-title">Auto-Zoom</div>
+      <div class="pipeline-desc">Progressive zoom on audio peaks, face-aware centering</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F3AC;</div>
+      <div class="pipeline-title">Transitions</div>
+      <div class="pipeline-desc">Cut, flash, zoom-in/out transitions for multi-clip compilations</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F5BC;</div>
+      <div class="pipeline-title">B-Roll</div>
+      <div class="pipeline-desc">LLM-driven Pexels stock footage insertion, 40% overlay blend</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F916;</div>
+      <div class="pipeline-title">LLM Scoring</div>
+      <div class="pipeline-desc">Transcript-aware punchline detection, hook analysis, contextual titles</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F441;</div>
+      <div class="pipeline-title">Visual Analysis</div>
+      <div class="pipeline-desc">Claude Vision API for kills, victories, achievements detection</div>
+    </div>
+    <div class="pipeline-card">
+      <div class="pipeline-icon">&#x1F680;</div>
+      <div class="pipeline-title">Multi-Platform</div>
+      <div class="pipeline-desc">Direct publish to TikTok, YouTube Shorts, Instagram Reels</div>
+    </div>
+  </div>
+</section>
+
+<!-- BLOCKING -->
+<section id="blocking" class="container">
+  <h2>What's <span class="text-gradient">Blocking</span></h2>
+  <p class="section-subtitle">// resolve before beta</p>
+
+  <div class="blocking-grid">
+    <div class="blocking-item">
+      <div class="blocking-label">Critical</div>
+      <div class="blocking-title">79 Uncommitted Files</div>
+      <div class="blocking-detail">Working tree has 79 modified/deleted files including server configs, tests, and deleted worktree submodules</div>
+    </div>
+    <div class="blocking-item">
+      <div class="blocking-label">Critical</div>
+      <div class="blocking-title">41 Unpushed Commits</div>
+      <div class="blocking-detail">Local main is 41 commits ahead of origin/main. No remote backup exists for the Ralphy feature work.</div>
+    </div>
+    <div class="blocking-item">
+      <div class="blocking-label">High</div>
+      <div class="blocking-title">44/46 Test Files Failing</div>
+      <div class="blocking-detail">44 test files collect 0 tests (import/setup issues). 15 individual test assertions fail across fusion, JobCard, useAuth, VodBrowserModal.</div>
+    </div>
+    <div class="blocking-item">
+      <div class="blocking-label">Medium</div>
+      <div class="blocking-title">No Deployment Pipeline</div>
+      <div class="blocking-detail">Backend has no production deployment. Frontend not hosted. Docker compose exists but is uncommitted/modified.</div>
+    </div>
+    <div class="blocking-item">
+      <div class="blocking-label">Medium</div>
+      <div class="blocking-title">Platform API Keys Missing</div>
+      <div class="blocking-detail">TikTok, YouTube, Instagram, Pexels, and Anthropic/OpenAI API keys not configured for production.</div>
+    </div>
+    <div class="blocking-item">
+      <div class="blocking-label">Low</div>
+      <div class="blocking-title">Worktree Cleanup</div>
+      <div class="blocking-detail">.ralphy-worktrees/ submodule references deleted but not cleaned up in git. Needs prune.</div>
+    </div>
+  </div>
+</section>
+
+<!-- GANTT TIMELINE -->
+<section id="timeline" class="container">
+  <h2>Timeline <span class="text-gradient">Gantt</span></h2>
+  <p class="section-subtitle">// 6 weeks to public launch</p>
+
+  <div class="gantt-wrapper">
+    <div class="gantt">
+      <div class="gantt-header">
+        <div></div>
+        <div class="gantt-weeks">
+          <div class="gantt-week-label">Mar 10</div>
+          <div class="gantt-week-label">Mar 17</div>
+          <div class="gantt-week-label">Mar 24</div>
+          <div class="gantt-week-label">Mar 31</div>
+          <div class="gantt-week-label">Apr 7</div>
+          <div class="gantt-week-label">Apr 14</div>
+        </div>
+      </div>
+
+      <div class="gantt-row">
+        <div class="gantt-label"><span class="tag tag-red" style="margin-right:8px;">S1</span> Stabilize</div>
+        <div class="gantt-bar-track">
+          <div class="gantt-bar bar-s1">5 days</div>
+          <div class="gantt-today"></div>
+        </div>
+      </div>
+
+      <div class="gantt-row">
+        <div class="gantt-label"><span class="tag tag-yellow" style="margin-right:8px;">S2</span> Infra</div>
+        <div class="gantt-bar-track">
+          <div class="gantt-bar bar-s2">5 days</div>
+        </div>
+      </div>
+
+      <div class="gantt-row">
+        <div class="gantt-label"><span class="tag tag-blue" style="margin-right:8px;">S3</span> Beta</div>
+        <div class="gantt-bar-track">
+          <div class="gantt-bar bar-s3">8 days</div>
+        </div>
+      </div>
+
+      <div class="gantt-row">
+        <div class="gantt-label"><span class="tag tag-green" style="margin-right:8px;">S4</span> Launch</div>
+        <div class="gantt-bar-track">
+          <div class="gantt-bar bar-s4">8 days</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SPRINT DETAILS -->
+<section id="sprints" class="container">
+  <h2>Sprint <span class="text-gradient">Details</span></h2>
+  <p class="section-subtitle">// task breakdown by sprint</p>
+
+  <div style="overflow-x: auto;">
+    <table class="sprint-table">
+      <thead>
+        <tr>
+          <th style="width: 120px;">Sprint</th>
+          <th style="width: 130px;">Dates</th>
+          <th>Goal</th>
+          <th>Key Deliverables</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="sprint-name tag tag-red">S1</span></td>
+          <td class="sprint-dates">Mar 10 &ndash; 14</td>
+          <td class="sprint-goal">Fix all tests, commit 79 files, push 41 commits. Clean, green main branch.</td>
+          <td class="sprint-deliverable">All 92 tests passing, 0 tsc errors, origin/main up to date</td>
+        </tr>
+        <tr>
+          <td><span class="sprint-name tag tag-yellow">S2</span></td>
+          <td class="sprint-dates">Mar 17 &ndash; 21</td>
+          <td class="sprint-goal">Production infrastructure. Docker, Redis, Supabase prod, platform API keys.</td>
+          <td class="sprint-deliverable">docker-compose prod config, DB migrations, .env.production, CI pipeline</td>
+        </tr>
+        <tr>
+          <td><span class="sprint-name tag tag-blue">S3</span></td>
+          <td class="sprint-dates">Mar 24 &ndash; Apr 4</td>
+          <td class="sprint-goal">Deploy and beta test. Real Twitch VODs through full pipeline. Platform OAuth flows.</td>
+          <td class="sprint-deliverable">Live backend + frontend, 10+ VODs processed, TikTok/YouTube/IG publishing verified</td>
+        </tr>
+        <tr>
+          <td><span class="sprint-name tag tag-green">S4</span></td>
+          <td class="sprint-dates">Apr 7 &ndash; 18</td>
+          <td class="sprint-goal">Landing page, pricing, public launch announcement.</td>
+          <td class="sprint-deliverable">Marketing site, payment integration, launch post, monitoring/alerting</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- MILESTONES -->
+<section id="milestones" class="container">
+  <h2>Key <span class="text-gradient">Milestones</span></h2>
+  <p class="section-subtitle">// dates that matter</p>
+
+  <div class="milestones">
+    <div class="milestone">
+      <div class="milestone-dot active"></div>
+      <div class="milestone-date">Mar 8 &mdash; Today</div>
+      <div class="milestone-title">Project Audit Complete</div>
+      <div class="milestone-desc">149 commits, 19 features built, 79 uncommitted files, 44 failing test files identified.</div>
+    </div>
+    <div class="milestone">
+      <div class="milestone-dot"></div>
+      <div class="milestone-date">Mar 14</div>
+      <div class="milestone-title">Code Freeze / Green Tests</div>
+      <div class="milestone-desc">All tests passing, all code committed and pushed, clean main branch.</div>
+    </div>
+    <div class="milestone">
+      <div class="milestone-dot"></div>
+      <div class="milestone-date">Mar 21</div>
+      <div class="milestone-title">Infrastructure Ready</div>
+      <div class="milestone-desc">Production Docker, Supabase, Redis, and platform API integrations configured.</div>
+    </div>
+    <div class="milestone">
+      <div class="milestone-dot"></div>
+      <div class="milestone-date">Mar 24</div>
+      <div class="milestone-title">First Production Deploy</div>
+      <div class="milestone-desc">Backend live, frontend hosted, first real Twitch VOD processed end-to-end.</div>
+    </div>
+    <div class="milestone">
+      <div class="milestone-dot"></div>
+      <div class="milestone-date">Apr 4</div>
+      <div class="milestone-title">Beta Complete</div>
+      <div class="milestone-desc">10+ VODs tested, all platforms verified, performance benchmarked.</div>
+    </div>
+    <div class="milestone">
+      <div class="milestone-dot"></div>
+      <div class="milestone-date">Apr 18</div>
+      <div class="milestone-title">Public Launch</div>
+      <div class="milestone-desc">Landing page, pricing, public access. ClipForge goes live.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section id="roadmap" class="container">
+  <h2>Post-Launch <span class="text-gradient">Roadmap</span></h2>
+  <p class="section-subtitle">// what comes next</p>
+
+  <div class="roadmap-grid">
+    <div class="roadmap-card">
+      <div class="roadmap-quarter">Q2 2026</div>
+      <div class="roadmap-title">Platform Expansion</div>
+      <ul class="roadmap-items">
+        <li>Twitter/X video posting</li>
+        <li>Facebook Reels integration</li>
+        <li>Kick.com VOD support</li>
+        <li>YouTube Gaming VOD import</li>
+      </ul>
+    </div>
+    <div class="roadmap-card">
+      <div class="roadmap-quarter">Q2 2026</div>
+      <div class="roadmap-title">AI Improvements</div>
+      <ul class="roadmap-items">
+        <li>Fine-tuned game event detection (per-game models)</li>
+        <li>Improved hook scoring with retention data</li>
+        <li>Auto-hashtag generation per platform</li>
+        <li>Trending audio matching</li>
+      </ul>
+    </div>
+    <div class="roadmap-card">
+      <div class="roadmap-quarter">Q3 2026</div>
+      <div class="roadmap-title">Live Monitoring</div>
+      <ul class="roadmap-items">
+        <li>Real-time stream analysis (not just VODs)</li>
+        <li>Instant clip extraction during live streams</li>
+        <li>WebSocket-driven live dashboard</li>
+        <li>Auto-publish while streaming</li>
+      </ul>
+    </div>
+    <div class="roadmap-card">
+      <div class="roadmap-quarter">Q3 2026</div>
+      <div class="roadmap-title">Creator Tools</div>
+      <ul class="roadmap-items">
+        <li>Template marketplace for caption presets</li>
+        <li>Team collaboration features</li>
+        <li>Mobile app for clip review/approval</li>
+        <li>Analytics dashboard with platform insights</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="stack" class="container">
+  <h2>Tech <span class="text-gradient">Stack</span></h2>
+  <p class="section-subtitle">// what powers the forge</p>
+
+  <div class="stack-grid">
+    <div class="stack-item">
+      <div class="stack-icon">&#x26A1;</div>
+      <div class="stack-name">Bun</div>
+      <div class="stack-role">Runtime</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x1F525;</div>
+      <div class="stack-name">Hono</div>
+      <div class="stack-role">API Framework</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x269B;</div>
+      <div class="stack-name">React 19</div>
+      <div class="stack-role">Frontend</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x1F4E6;</div>
+      <div class="stack-name">Vite 6</div>
+      <div class="stack-role">Build Tool</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x1F4CB;</div>
+      <div class="stack-name">BullMQ</div>
+      <div class="stack-role">Job Queue</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x1F534;</div>
+      <div class="stack-name">Redis</div>
+      <div class="stack-role">Cache / Queue</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x1F464;</div>
+      <div class="stack-name">MediaPipe</div>
+      <div class="stack-role">Face Tracking</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x1F3AC;</div>
+      <div class="stack-name">FFmpeg</div>
+      <div class="stack-role">Video Processing</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x1F5C4;</div>
+      <div class="stack-name">Supabase</div>
+      <div class="stack-role">Auth / DB / Storage</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x1F399;</div>
+      <div class="stack-name">Whisper</div>
+      <div class="stack-role">Transcription</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x1F9E0;</div>
+      <div class="stack-name">Claude AI</div>
+      <div class="stack-role">LLM / Vision</div>
+    </div>
+    <div class="stack-item">
+      <div class="stack-icon">&#x1F3A8;</div>
+      <div class="stack-name">Tailwind CSS</div>
+      <div class="stack-role">Styling</div>
+    </div>
+  </div>
+</section>
+
+<!-- DOCS -->
+<section id="docs" class="container">
+  <h2>Project <span class="text-gradient">Docs</span></h2>
+  <p class="section-subtitle">// reference files</p>
+
+  <table class="docs-table">
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Purpose</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>README.md</code></td>
+        <td class="desc">Project overview, getting started, structure</td>
+        <td><span class="tag tag-green">Current</span></td>
+      </tr>
+      <tr>
+        <td><code>CHANGELOG.md</code></td>
+        <td class="desc">Night 1 feature history</td>
+        <td><span class="tag tag-yellow">Needs Update</span></td>
+      </tr>
+      <tr>
+        <td><code>ENV_SETUP.md</code></td>
+        <td class="desc">Dual .env configuration (root + server)</td>
+        <td><span class="tag tag-green">Current</span></td>
+      </tr>
+      <tr>
+        <td><code>PRD.yaml</code></td>
+        <td class="desc">19 task product requirements</td>
+        <td><span class="tag tag-green">Current</span></td>
+      </tr>
+      <tr>
+        <td><code>tasks/todo.md</code></td>
+        <td class="desc">Release checklist with sprint breakdown</td>
+        <td><span class="tag tag-green">Current</span></td>
+      </tr>
+      <tr>
+        <td><code>docs/timeline-to-release.html</code></td>
+        <td class="desc">This page &mdash; visual release timeline</td>
+        <td><span class="tag tag-green">Current</span></td>
+      </tr>
+      <tr>
+        <td><code>docs/archive/BUILD_PLAN.md</code></td>
+        <td class="desc">Original build roadmap (superseded by todo.md)</td>
+        <td><span class="tag tag-gray">Archived</span></td>
+      </tr>
+      <tr>
+        <td><code>docs/archive/RALPHY_EXECUTION_SUMMARY.md</code></td>
+        <td class="desc">AI agent execution log (19 features / 170 min)</td>
+        <td><span class="tag tag-gray">Archived</span></td>
+      </tr>
+      <tr>
+        <td><code>docs/archive/RALPHY_SETUP.md</code></td>
+        <td class="desc">Ralphy agent setup guide</td>
+        <td><span class="tag tag-gray">Archived</span></td>
+      </tr>
+      <tr>
+        <td><code>docs/archive/PLAYWRIGHT_TEST_REPORT.md</code></td>
+        <td class="desc">Historical E2E test report</td>
+        <td><span class="tag tag-gray">Archived</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer container">
+  <p class="footer-text">ClipForge &mdash; Built by Diego + AI &mdash; <span class="mono">2026-03-08</span></p>
+</footer>
+
+</body>
+</html>
