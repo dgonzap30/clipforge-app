@@ -43,3 +43,6 @@ coverage
 
 # Misc
 *.tsbuildinfo
+
+# Security & build artifacts
+.next/
