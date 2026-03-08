@@ -142,7 +142,7 @@ export function Clips() {
       {/* Error state */}
       {error && (
         <div className="card p-4 bg-red-500/10 border-red-500/20">
-          <p className="text-red-400">{error}</p>
+          <p className="text-red-400 break-words">{error}</p>
         </div>
       )}
 

@@ -1,8 +1,8 @@
 import { NavLink } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  Film, 
-  ListTodo, 
+import {
+  LayoutDashboard,
+  Film,
+  ListTodo,
   Settings,
   Flame
 } from 'lucide-react'
@@ -15,9 +15,19 @@ const navItems = [
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   return (
-    <aside className="w-64 bg-dark-900 border-r border-dark-800 flex flex-col">
+    <aside className={cn(
+      'w-64 bg-dark-900 border-r border-dark-800 flex flex-col',
+      'fixed md:static inset-y-0 left-0 z-50',
+      'transition-transform duration-300 ease-in-out',
+      isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+    )}>
       {/* Logo */}
       <div className="p-6 border-b border-dark-800">
         <NavLink to="/" className="flex items-center gap-3">
@@ -36,6 +46,7 @@ export function Sidebar() {
               <NavLink
                 to={to}
                 end={to === '/'}
+                onClick={onClose}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',

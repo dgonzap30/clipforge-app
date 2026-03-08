@@ -1,5 +1,5 @@
 import { X, Play, Pause, Volume2, VolumeX, Maximize, Download } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { clips } from '@/lib/api'
 
 interface ClipPlayerModalProps {
@@ -47,6 +47,37 @@ export function ClipPlayerModal({ clipId, isOpen, onClose }: ClipPlayerModalProp
 
     fetchClip()
   }, [clipId, isOpen])
+
+  // Define callback functions first (before they're used in effects)
+  const togglePlayPause = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    if (video.paused) {
+      video.play()
+    } else {
+      video.pause()
+    }
+  }, [])
+
+  const toggleMute = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    video.muted = !video.muted
+    setIsMuted(video.muted)
+  }, [])
+
+  const toggleFullscreen = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    if (!document.fullscreenElement) {
+      video.requestFullscreen()
+    } else {
+      document.exitFullscreen()
+    }
+  }, [])
 
   // Video event handlers
   useEffect(() => {
@@ -112,39 +143,9 @@ export function ClipPlayerModal({ clipId, isOpen, onClose }: ClipPlayerModalProp
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, togglePlayPause, toggleMute, toggleFullscreen])
 
-  const togglePlayPause = () => {
-    const video = videoRef.current
-    if (!video) return
-
-    if (video.paused) {
-      video.play()
-    } else {
-      video.pause()
-    }
-  }
-
-  const toggleMute = () => {
-    const video = videoRef.current
-    if (!video) return
-
-    video.muted = !video.muted
-    setIsMuted(video.muted)
-  }
-
-  const toggleFullscreen = () => {
-    const video = videoRef.current
-    if (!video) return
-
-    if (!document.fullscreenElement) {
-      video.requestFullscreen()
-    } else {
-      document.exitFullscreen()
-    }
-  }
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current
     if (!video) return
 
@@ -152,18 +153,18 @@ export function ClipPlayerModal({ clipId, isOpen, onClose }: ClipPlayerModalProp
     video.volume = newVolume
     setVolume(newVolume)
     setIsMuted(newVolume === 0)
-  }
+  }, [])
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current
     if (!video) return
 
     const newTime = parseFloat(e.target.value)
     video.currentTime = newTime
     setCurrentTime(newTime)
-  }
+  }, [])
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     if (!signedUrl) return
 
     const link = document.createElement('a')
@@ -172,7 +173,7 @@ export function ClipPlayerModal({ clipId, isOpen, onClose }: ClipPlayerModalProp
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-  }
+  }, [signedUrl, clip])
 
   const formatTime = (seconds: number) => {
     if (!isFinite(seconds)) return '0:00'

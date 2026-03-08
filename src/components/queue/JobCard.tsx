@@ -1,4 +1,5 @@
 import { ExternalLink, X, RotateCcw, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { PipelineSteps } from './PipelineSteps'
 import { ProcessingJob, JobStatus } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -40,6 +41,11 @@ const STATUS_CONFIG: Record<JobStatus, {
   },
   captioning: {
     label: 'Captioning',
+    color: 'text-cyan-400',
+    icon: Loader2,
+  },
+  processing: {
+    label: 'Processing',
     color: 'text-cyan-400',
     icon: Loader2,
   },
@@ -89,13 +95,13 @@ export function JobCard({ job, onCancel, onRetry, onDelete }: JobCardProps) {
           {/* Title and channel */}
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-medium truncate">{job.title}</h3>
+              <div className="flex items-center gap-2 min-w-0">
+                <h3 className="font-medium truncate flex-1 min-w-0">{job.title}</h3>
                 <a
                   href={job.vodUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-dark-400 hover:text-white transition-colors"
+                  className="text-dark-400 hover:text-white transition-colors flex-shrink-0"
                   title="Open VOD"
                 >
                   <ExternalLink className="w-4 h-4" />
@@ -108,37 +114,44 @@ export function JobCard({ job, onCancel, onRetry, onDelete }: JobCardProps) {
           </div>
 
           {/* Status indicator */}
-          <div className="flex items-center gap-2 mb-3">
-            {StatusIcon && (
-              <StatusIcon
-                className={cn(
-                  'w-4 h-4',
-                  statusConfig.color,
-                  isProcessing && 'animate-spin'
-                )}
-              />
+          <div className="mb-3">
+            <div className="flex items-center gap-2">
+              {StatusIcon && (
+                <StatusIcon
+                  className={cn(
+                    'w-4 h-4 flex-shrink-0',
+                    statusConfig.color,
+                    isProcessing && 'animate-spin'
+                  )}
+                />
+              )}
+              <span className={cn('text-sm font-medium', statusConfig.color)}>
+                {statusConfig.label}
+              </span>
+            </div>
+            {job.currentStep && isProcessing && (
+              <p className="text-xs text-dark-400 mt-1 break-words">
+                {job.currentStep}
+              </p>
             )}
-            <span className={cn('text-sm font-medium', statusConfig.color)}>
-              {statusConfig.label}
-              {job.currentStep && isProcessing && ` - ${job.currentStep}`}
-            </span>
           </div>
 
-          {/* Progress bar - only show for non-terminal states */}
+          {/* Processing Steps - only show for non-terminal states */}
           {!isTerminal && (
-            <div className="mb-2">
-              <div className="flex items-center justify-between text-sm mb-1">
-                <span className="text-dark-400">
-                  {job.status === 'queued' ? 'Waiting in queue...' : 'Processing...'}
+            <div className="mb-4">
+              <PipelineSteps status={job.status} progress={job.progress} />
+
+              <div className="flex items-center justify-between text-xs mt-3 px-1">
+                <span className="text-forge-400 font-medium tracking-wide uppercase">
+                  {STATUS_CONFIG[job.status]?.label || 'Processing'}
                 </span>
-                <span className="text-dark-400">{job.progress}%</span>
+                <span className="text-dark-400 font-mono">{job.progress}%</span>
               </div>
-              <div className="h-2 bg-dark-800 rounded-full overflow-hidden">
+
+              {/* Active stage progress bar */}
+              <div className="h-1 bg-dark-800 rounded-full overflow-hidden mt-1">
                 <div
-                  className={cn(
-                    'h-full transition-all duration-300',
-                    job.status === 'queued' ? 'bg-dark-600' : 'bg-forge-500'
-                  )}
+                  className="h-full bg-forge-500 transition-all duration-300"
                   style={{ width: `${job.progress}%` }}
                 />
               </div>
@@ -153,7 +166,7 @@ export function JobCard({ job, onCancel, onRetry, onDelete }: JobCardProps) {
           )}
 
           {job.status === 'failed' && job.error && (
-            <p className="text-sm text-red-400 mt-1">
+            <p className="text-sm text-red-400 mt-1 break-words">
               Error: {job.error}
             </p>
           )}

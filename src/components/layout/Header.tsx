@@ -1,8 +1,12 @@
-import { Bell, Search, User, ChevronDown, LogOut } from 'lucide-react'
+import { Bell, Search, User, ChevronDown, LogOut, Menu } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useState, useRef, useEffect } from 'react'
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick: () => void
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const { user, isAuthenticated, login, logout, loading } = useAuth()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -26,15 +30,26 @@ export function Header() {
   const avatarUrl = user.avatarUrl
 
   return (
-    <header className="h-16 border-b border-dark-800 bg-dark-900 flex items-center justify-between px-6">
-      {/* Search */}
-      <div className="relative w-96">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500" />
-        <input
-          type="text"
-          placeholder="Search clips, streams..."
-          className="input pl-10"
-        />
+    <header className="h-16 border-b border-dark-800 bg-dark-900 flex items-center justify-between px-4 md:px-6">
+      <div className="flex items-center gap-4 flex-1">
+        {/* Mobile menu button */}
+        <button
+          onClick={onMenuClick}
+          className="md:hidden btn-ghost p-2"
+          aria-label="Toggle menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        {/* Search */}
+        <div className="relative flex-1 max-w-md hidden sm:block">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500" />
+          <input
+            type="text"
+            placeholder="Search clips, streams..."
+            className="input pl-10 w-full"
+          />
+        </div>
       </div>
 
       {/* Actions */}

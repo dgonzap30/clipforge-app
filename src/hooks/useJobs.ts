@@ -30,7 +30,7 @@ export function useJobs(options: UseJobsOptions = {}) {
 
       // Only poll if there are active (non-terminal) jobs
       const hasActiveJobs = jobs.some(
-        j => !['completed', 'failed'].includes(j.status)
+        j => !['completed', 'failed', 'cancelled'].includes(j.status)
       )
       return hasActiveJobs ? pollInterval : false
     },
@@ -85,6 +85,17 @@ export function useJobs(options: UseJobsOptions = {}) {
     },
   })
 
+  const prioritizeJobMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await api.jobs.prioritize(id)
+    },
+    onSuccess: (updatedJob) => {
+      queryClient.setQueryData<ProcessingJob[]>([JOBS_QUERY_KEY, status], (old) =>
+        old ? old.map(j => j.id === updatedJob.id ? updatedJob : j) : [updatedJob]
+      )
+    },
+  })
+
   return {
     jobs,
     loading,
@@ -94,6 +105,7 @@ export function useJobs(options: UseJobsOptions = {}) {
     cancelJob: cancelJobMutation.mutateAsync,
     retryJob: retryJobMutation.mutateAsync,
     deleteJob: deleteJobMutation.mutateAsync,
+    prioritizeJob: prioritizeJobMutation.mutateAsync,
   }
 }
 
@@ -117,7 +129,7 @@ export function useJobProgress(jobId: string | null, pollInterval = 2000) {
       if (!job || !jobId) return false
 
       // Stop polling once job reaches a terminal state
-      const isTerminal = ['completed', 'failed'].includes(job.status)
+      const isTerminal = ['completed', 'failed', 'cancelled'].includes(job.status)
       return isTerminal ? false : pollInterval
     },
   })

@@ -19,16 +19,16 @@ export function ProcessingQueue({ jobs }: ProcessingQueueProps) {
       <div className="p-4 space-y-4">
         {jobs.map((job) => (
           <div key={job.id} className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 {job.progress > 0 ? (
-                  <Loader2 className="w-4 h-4 text-forge-400 animate-spin" />
+                  <Loader2 className="w-4 h-4 text-forge-400 animate-spin flex-shrink-0" />
                 ) : (
-                  <div className="w-4 h-4 rounded-full border-2 border-dark-600" />
+                  <div className="w-4 h-4 rounded-full border-2 border-dark-600 flex-shrink-0" />
                 )}
                 <span className="text-sm font-medium truncate">{job.title}</span>
               </div>
-              <span className="text-sm text-dark-400">{job.progress}%</span>
+              <span className="text-sm text-dark-400 flex-shrink-0">{job.progress}%</span>
             </div>
             <div className="h-1.5 bg-dark-800 rounded-full overflow-hidden">
               <div

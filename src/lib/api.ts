@@ -84,7 +84,7 @@ export const vods = {
     pagination: { cursor?: string }
     user: { id: string; login: string; displayName: string }
   }>('/api/vods/mine'),
-  
+
   getByChannel: (login: string) => request<{
     vods: VOD[]
     pagination: { cursor?: string }
@@ -95,13 +95,13 @@ export const vods = {
       profileImageUrl: string
     }
   }>(`/api/vods/channel/${login}`),
-  
+
   getById: (id: string) => request<VOD & {
     description: string
     mutedSegments: Array<{ duration: number; offset: number }> | null
     channel: { id: string; login: string; displayName: string }
   }>(`/api/vods/${id}`),
-  
+
   getClips: (login: string) => request<{
     clips: unknown[]
     pagination: { cursor?: string }
@@ -109,12 +109,13 @@ export const vods = {
 }
 
 // Jobs API
-export type JobStatus = 
+export type JobStatus =
   | 'queued'
   | 'downloading'
   | 'analyzing'
   | 'extracting'
   | 'reframing'
+  | 'processing'
   | 'captioning'
   | 'completed'
   | 'failed'
@@ -151,9 +152,9 @@ export const jobs = {
   list: (status?: JobStatus) => request<{ jobs: ProcessingJob[] }>(
     `/api/jobs${status ? `?status=${status}` : ''}`
   ),
-  
+
   get: (id: string) => request<ProcessingJob>(`/api/jobs/${id}`),
-  
+
   create: (data: {
     vodId: string
     vodUrl: string
@@ -165,17 +166,21 @@ export const jobs = {
     method: 'POST',
     body: JSON.stringify(data),
   }),
-  
+
   cancel: (id: string) => request<ProcessingJob>(`/api/jobs/${id}/cancel`, {
     method: 'POST',
   }),
-  
+
   retry: (id: string) => request<ProcessingJob>(`/api/jobs/${id}/retry`, {
     method: 'POST',
   }),
-  
+
   delete: (id: string) => request<{ success: boolean }>(`/api/jobs/${id}`, {
     method: 'DELETE',
+  }),
+
+  prioritize: (id: string) => request<ProcessingJob>(`/api/jobs/${id}/prioritize`, {
+    method: 'POST',
   }),
 }
 
@@ -208,29 +213,29 @@ export const clips = {
     if (options?.status) params.set('status', options.status)
     if (options?.limit) params.set('limit', String(options.limit))
     if (options?.offset) params.set('offset', String(options.offset))
-    
+
     return request<{ clips: Clip[]; total: number; hasMore: boolean }>(
       `/api/clips${params.toString() ? `?${params}` : ''}`
     )
   },
-  
+
   get: (id: string) => request<Clip>(`/api/clips/${id}`),
-  
-  update: (id: string, data: Partial<Pick<Clip, 'title' | 'status'>>) => 
+
+  update: (id: string, data: Partial<Pick<Clip, 'title' | 'status'>>) =>
     request<Clip>(`/api/clips/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
-  
+
   delete: (id: string) => request<{ success: boolean }>(`/api/clips/${id}`, {
     method: 'DELETE',
   }),
-  
+
   bulkDelete: (ids: string[]) => request<{ deleted: number }>('/api/clips/bulk/delete', {
     method: 'POST',
     body: JSON.stringify({ ids }),
   }),
-  
+
   bulkExport: (ids: string[], platform: 'tiktok' | 'youtube' | 'instagram') =>
     request<{ exported: string[] }>('/api/clips/bulk/export', {
       method: 'POST',

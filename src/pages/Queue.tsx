@@ -1,18 +1,19 @@
 import { useState } from 'react'
-import { Plus, Pause, X, ExternalLink, RefreshCw, Trash2, AlertCircle } from 'lucide-react'
+import { Plus, Pause, X, ExternalLink, RefreshCw, Trash2, AlertCircle, ArrowUpCircle } from 'lucide-react'
 import { useJobs } from '@/hooks/useJobs'
 import { VodBrowserModal } from '@/components/queue/VodBrowserModal'
 import { ProcessingJob } from '@/lib/api'
 
 export function Queue() {
-  const { jobs, loading, error, cancelJob, retryJob, deleteJob } = useJobs()
+  const { jobs, loading, error, refresh, cancelJob, retryJob, deleteJob, prioritizeJob } = useJobs()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const handleJobCreated = (job: ProcessingJob) => {
-    // Job has been created, jobs list will auto-refresh via TanStack Query
+    // Job has been created, trigger refresh
     console.log('Job created:', job.id)
+    refresh()
     setIsModalOpen(false)
   }
 
@@ -59,6 +60,20 @@ export function Queue() {
     }
   }
 
+  const handlePrioritize = async (id: string) => {
+    try {
+      setActionLoading(id)
+      setActionError(null)
+      await prioritizeJob(id)
+    } catch (err) {
+      console.error('Failed to prioritize job:', err)
+      setActionError(err instanceof Error ? err.message : 'Failed to prioritize job')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  // Helper functions
   const getStatusDisplay = (status: string) => {
     const statusMap: Record<string, string> = {
       queued: 'Queued',
@@ -76,6 +91,21 @@ export function Queue() {
   const isProcessing = (status: string) => {
     return ['downloading', 'analyzing', 'extracting', 'reframing', 'captioning'].includes(status)
   }
+
+  // Group jobs by status
+  // Only ONE job can be truly active (worker concurrency: 1)
+  const processingJobs = jobs.filter(job => isProcessing(job.status))
+  // Sort by updatedAt descending - most recent is the active one
+  const sortedProcessing = [...processingJobs].sort((a, b) =>
+    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+  const activeJob = sortedProcessing[0] || null
+  const stalledJobs = sortedProcessing.slice(1) // Jobs that appear stuck
+
+  const queuedJobs = jobs.filter(job => job.status === 'queued')
+  const completedJobs = jobs.filter(job => job.status === 'completed')
+  const failedJobs = jobs.filter(job => job.status === 'failed')
+  const terminalJobs = [...completedJobs, ...failedJobs]
 
   return (
     <div className="space-y-6">
@@ -127,134 +157,331 @@ export function Queue() {
           <p className="text-dark-400">Loading queue...</p>
         </div>
       ) : jobs.length > 0 ? (
-        <div className="space-y-3">
-          {jobs.map((job) => (
-            <div key={job.id} className="card p-4">
-              <div className="flex items-center gap-4">
-                {/* Thumbnail placeholder */}
-                <div className="w-32 h-20 bg-dark-800 rounded-lg flex-shrink-0 flex items-center justify-center text-dark-600 text-sm">
-                  Thumbnail
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium truncate">{job.title}</h3>
-                    <a
-                      href={job.vodUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-dark-400 hover:text-white transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
+        <div className="space-y-6">
+          {/* Active Job (only one can be active with concurrency: 1) */}
+          {activeJob && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-dark-400 uppercase tracking-wide flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-forge-500 animate-pulse" />
+                Active
+              </h2>
+              <div className="card p-4 border-l-4 border-forge-500">
+                <div className="flex items-center gap-4">
+                  {/* Thumbnail placeholder */}
+                  <div className="w-32 h-20 bg-dark-800 rounded-lg flex-shrink-0 flex items-center justify-center text-dark-600 text-sm">
+                    Thumbnail
                   </div>
-                  <p className="text-sm text-dark-400 mt-1">
-                    {job.channelLogin} • {Math.floor(job.duration / 3600)}:{String(Math.floor((job.duration % 3600) / 60)).padStart(2, '0')}:{String(job.duration % 60).padStart(2, '0')}
-                  </p>
 
-                  {/* Progress bar for processing jobs */}
-                  {isProcessing(job.status) && (
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <h3 className="font-medium truncate flex-1 min-w-0">{activeJob.title}</h3>
+                      <a
+                        href={activeJob.vodUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-dark-400 hover:text-white transition-colors flex-shrink-0"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                    <p className="text-sm text-dark-400 mt-1">
+                      {activeJob.channelLogin} • {Math.floor(activeJob.duration / 3600)}:{String(Math.floor((activeJob.duration % 3600) / 60)).padStart(2, '0')}:{String(activeJob.duration % 60).padStart(2, '0')}
+                    </p>
+
+                    {/* Progress bar */}
                     <div className="mt-3">
                       <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="text-forge-400">{getStatusDisplay(job.status)}</span>
-                        <span className="text-dark-400">{Math.round(job.progress)}%</span>
+                        <span className="text-forge-400">{getStatusDisplay(activeJob.status)}</span>
+                        <span className="text-dark-400">{Math.round(activeJob.progress)}%</span>
                       </div>
                       <div className="h-2 bg-dark-800 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-forge-500 transition-all duration-300"
-                          style={{ width: `${job.progress}%` }}
+                          style={{ width: `${activeJob.progress}%` }}
                         />
                       </div>
-                      {job.clipsFound > 0 && (
+                      {activeJob.currentStep && (
+                        <p className="text-xs text-dark-500 mt-1 break-words">
+                          {activeJob.currentStep}
+                        </p>
+                      )}
+                      {activeJob.clipsFound > 0 && (
                         <p className="text-xs text-dark-500 mt-1">
-                          {job.clipsFound} potential clips found
+                          {activeJob.clipsFound} potential clips found
                         </p>
                       )}
                     </div>
-                  )}
+                  </div>
 
-                  {/* Queued status */}
-                  {job.status === 'queued' && (
-                    <p className="text-sm text-dark-500 mt-2">Waiting in queue...</p>
-                  )}
-
-                  {/* Completed status */}
-                  {job.status === 'completed' && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="px-2 py-1 bg-green-500/10 border border-green-500/20 rounded text-xs text-green-400">
-                        Completed
-                      </div>
-                      <p className="text-xs text-dark-500">
-                        {job.clipsFound} clips generated
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Failed status */}
-                  {job.status === 'failed' && (
-                    <div className="mt-2">
-                      <div className="px-2 py-1 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400 inline-block">
-                        Failed
-                      </div>
-                      {job.error && (
-                        <p className="text-xs text-red-400 mt-1">{job.error}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* Pause/Resume button - only for processing jobs */}
-                  {isProcessing(job.status) && (
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       className="btn-secondary p-2"
-                      onClick={() => handleCancel(job.id)}
-                      disabled={actionLoading === job.id}
+                      onClick={() => handleCancel(activeJob.id)}
+                      disabled={actionLoading === activeJob.id}
                       title="Cancel job"
                     >
-                      {actionLoading === job.id ? (
+                      {actionLoading === activeJob.id ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
                       ) : (
                         <Pause className="w-4 h-4" />
                       )}
                     </button>
-                  )}
 
-                  {/* Retry button - only for failed jobs */}
-                  {job.status === 'failed' && (
                     <button
-                      className="btn-secondary p-2"
-                      onClick={() => handleRetry(job.id)}
-                      disabled={actionLoading === job.id}
-                      title="Retry job"
+                      className="btn-ghost p-2 text-red-400 hover:text-red-300"
+                      onClick={() => handleDelete(activeJob.id)}
+                      disabled={actionLoading === activeJob.id}
+                      title="Delete job"
                     >
-                      {actionLoading === job.id ? (
+                      {actionLoading === activeJob.id ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
                       ) : (
-                        <RefreshCw className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                       )}
                     </button>
-                  )}
-
-                  {/* Delete button */}
-                  <button
-                    className="btn-ghost p-2 text-red-400 hover:text-red-300"
-                    onClick={() => handleDelete(job.id)}
-                    disabled={actionLoading === job.id}
-                    title="Delete job"
-                  >
-                    {actionLoading === job.id ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="w-4 h-4" />
-                    )}
-                  </button>
+                  </div>
                 </div>
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Stalled Jobs - jobs with processing status but not being worked on */}
+          {stalledJobs.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-yellow-400 uppercase tracking-wide flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                Stalled ({stalledJobs.length})
+              </h2>
+              {stalledJobs.map((job) => (
+                <div key={job.id} className="card p-4 border-l-4 border-yellow-500/50 bg-yellow-500/5">
+                  <div className="flex items-center gap-4">
+                    {/* Thumbnail */}
+                    <div className="w-32 h-20 bg-dark-800 rounded-lg flex-shrink-0 flex items-center justify-center text-dark-600 text-sm">
+                      Thumbnail
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className="font-medium truncate flex-1 min-w-0">{job.title}</h3>
+                        <a
+                          href={job.vodUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-dark-400 hover:text-white transition-colors flex-shrink-0"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </div>
+                      <p className="text-sm text-dark-400 mt-1">
+                        {job.channelLogin} • {Math.floor(job.duration / 3600)}:{String(Math.floor((job.duration % 3600) / 60)).padStart(2, '0')}:{String(job.duration % 60).padStart(2, '0')}
+                      </p>
+                      <p className="text-xs text-yellow-400 mt-2">
+                        This job appears stuck. Status: {getStatusDisplay(job.status)} • {Math.round(job.progress)}%
+                      </p>
+                      {job.currentStep && (
+                        <p className="text-xs text-dark-500 mt-1 break-words">{job.currentStep}</p>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        className="btn-secondary p-2"
+                        onClick={() => handleCancel(job.id)}
+                        disabled={actionLoading === job.id}
+                        title="Cancel stalled job"
+                      >
+                        {actionLoading === job.id ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <X className="w-4 h-4" />
+                        )}
+                      </button>
+
+                      <button
+                        className="btn-ghost p-2 text-red-400 hover:text-red-300"
+                        onClick={() => handleDelete(job.id)}
+                        disabled={actionLoading === job.id}
+                        title="Delete job"
+                      >
+                        {actionLoading === job.id ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Queued Jobs */}
+          {queuedJobs.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-dark-400 uppercase tracking-wide">
+                Queued ({queuedJobs.length})
+              </h2>
+              {queuedJobs.map((job, index) => (
+                <div key={job.id} className="card p-4 group hover:border-forge-500/30 transition-colors">
+                  <div className="flex items-center gap-4">
+                    {/* Queue position */}
+                    <div className="w-12 h-12 bg-dark-800 rounded-lg flex-shrink-0 flex items-center justify-center">
+                      <span className="text-lg font-bold text-dark-400">#{index + 1}</span>
+                    </div>
+
+                    {/* Thumbnail */}
+                    <div className="w-32 h-20 bg-dark-800 rounded-lg flex-shrink-0 flex items-center justify-center text-dark-600 text-sm">
+                      Thumbnail
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className="font-medium truncate flex-1 min-w-0">{job.title}</h3>
+                        <a
+                          href={job.vodUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-dark-400 hover:text-white transition-colors flex-shrink-0"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </div>
+                      <p className="text-sm text-dark-400 mt-1">
+                        {job.channelLogin} • {Math.floor(job.duration / 3600)}:{String(Math.floor((job.duration % 3600) / 60)).padStart(2, '0')}:{String(job.duration % 60).padStart(2, '0')}
+                      </p>
+                      <p className="text-xs text-dark-500 mt-1">{job.currentStep}</p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* Process Next button - visible on hover */}
+                      <button
+                        className="btn-primary p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handlePrioritize(job.id)}
+                        disabled={actionLoading === job.id}
+                        title="Process next"
+                      >
+                        {actionLoading === job.id ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <ArrowUpCircle className="w-4 h-4" />
+                        )}
+                      </button>
+
+                      <button
+                        className="btn-ghost p-2 text-red-400 hover:text-red-300"
+                        onClick={() => handleDelete(job.id)}
+                        disabled={actionLoading === job.id}
+                        title="Delete job"
+                      >
+                        {actionLoading === job.id ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Completed/Failed Jobs */}
+          {terminalJobs.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-dark-400 uppercase tracking-wide">
+                Completed ({terminalJobs.length})
+              </h2>
+              {terminalJobs.map((job) => (
+                <div key={job.id} className="card p-4 opacity-70 hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-4">
+                    {/* Thumbnail */}
+                    <div className="w-32 h-20 bg-dark-800 rounded-lg flex-shrink-0 flex items-center justify-center text-dark-600 text-sm">
+                      Thumbnail
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className="font-medium truncate flex-1 min-w-0">{job.title}</h3>
+                        <a
+                          href={job.vodUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-dark-400 hover:text-white transition-colors flex-shrink-0"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </div>
+                      <p className="text-sm text-dark-400 mt-1">
+                        {job.channelLogin} • {Math.floor(job.duration / 3600)}:{String(Math.floor((job.duration % 3600) / 60)).padStart(2, '0')}:{String(job.duration % 60).padStart(2, '0')}
+                      </p>
+
+                      {job.status === 'completed' && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <div className="px-2 py-1 bg-green-500/10 border border-green-500/20 rounded text-xs text-green-400">
+                            Completed
+                          </div>
+                          <p className="text-xs text-dark-500">
+                            {job.clipsFound} clips generated
+                          </p>
+                        </div>
+                      )}
+
+                      {job.status === 'failed' && (
+                        <div className="mt-2">
+                          <div className="px-2 py-1 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400 inline-block">
+                            Failed
+                          </div>
+                          {job.error && (
+                            <p className="text-xs text-red-400 mt-1 break-words">{job.error}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {job.status === 'failed' && (
+                        <button
+                          className="btn-secondary p-2"
+                          onClick={() => handleRetry(job.id)}
+                          disabled={actionLoading === job.id}
+                          title="Retry job"
+                        >
+                          {actionLoading === job.id ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
+
+                      <button
+                        className="btn-ghost p-2 text-red-400 hover:text-red-300"
+                        onClick={() => handleDelete(job.id)}
+                        disabled={actionLoading === job.id}
+                        title="Delete job"
+                      >
+                        {actionLoading === job.id ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         /* Empty state */
