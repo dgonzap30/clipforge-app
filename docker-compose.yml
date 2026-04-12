@@ -19,40 +19,66 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+    image: clipforge-server:latest
     container_name: clipforge-api
     restart: unless-stopped
+    command: ["bun", "run", "start:api"]
     ports:
       - "${PORT:-8787}:8787"
     environment:
-      # Supabase
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-
-      # Redis
       - REDIS_URL=redis://redis:6379
-
-      # OpenAI
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
+      - TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-
-      # Security
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - PEXELS_API_KEY=${PEXELS_API_KEY}
       - JWT_SECRET=${JWT_SECRET:-change-this-in-production}
-
-      # App
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=8787
     depends_on:
       redis:
         condition: service_healthy
-    volumes:
-      - clipforge-temp:/tmp/clipforge
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8787/health"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 10s
+    networks:
+      - clipforge
+
+  worker:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: clipforge-server:latest
+    container_name: clipforge-worker
+    restart: unless-stopped
+    command: ["bun", "run", "start:worker"]
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - REDIS_URL=redis://redis:6379
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
+      - TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - PEXELS_API_KEY=${PEXELS_API_KEY}
+      - NODE_ENV=${NODE_ENV:-production}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-2}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - clipforge-temp:/tmp/clipforge
     networks:
       - clipforge
 

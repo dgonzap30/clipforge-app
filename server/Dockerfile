@@ -3,8 +3,8 @@ FROM oven/bun:1-alpine AS deps
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json bun.lockb* ./
+# Copy package files (bun.lock for Bun 1.2+, bun.lockb for older versions)
+COPY package.json bun.lock* bun.lockb* ./
 
 # Install production dependencies
 RUN bun install --frozen-lockfile --production
@@ -14,8 +14,8 @@ FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json bun.lockb* ./
+# Copy package files (bun.lock for Bun 1.2+, bun.lockb for older versions)
+COPY package.json bun.lock* bun.lockb* ./
 
 # Install all dependencies (including dev dependencies)
 RUN bun install --frozen-lockfile
@@ -56,12 +56,17 @@ RUN addgroup -g 1001 -S nodejs && \
 
 USER nodejs
 
-# Expose port
+# Default to API role. Override with `docker run ... bun run start:worker`
+# or via docker-compose `command:` to run as a worker.
+ENV ROLE=api
+
+# Expose port (only used when ROLE=api)
 EXPOSE 8787
 
-# Health check
+# Health check targets the API role only. Worker containers should override
+# or disable the healthcheck in their compose service.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD bun run -e 'fetch("http://localhost:8787/health").then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))'
 
-# Start the server
-CMD ["bun", "run", "start"]
+# Start the API server by default. Worker service overrides CMD in compose.
+CMD ["bun", "run", "start:api"]

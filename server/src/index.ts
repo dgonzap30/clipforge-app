@@ -9,59 +9,37 @@ import { vodsRoutes } from './routes/vods'
 import { clipsRoutes } from './routes/clips'
 import { jobsRoutes } from './routes/jobs'
 import { platformsRoutes } from './routes/platforms'
-import { vodWorker as _vodWorker, closeWorker } from './queue/worker'
 import { redisConnection } from './queue/connection'
 
-// Validate environment variables on startup
 validateEnv()
-
-// Use Bun's shell for concise cleanup
-import { $ } from 'bun'
-import { existsSync } from 'fs'
-
-// Startup cleanup of temporary files
-async function cleanupTempFiles() {
-  const tempDir = '/tmp/clipforge'
-  if (existsSync(tempDir)) {
-    console.log('🧹 Cleaning up temporary files in', tempDir)
-    try {
-      // Remove all contents but keep the directory
-      await $`rm -rf ${tempDir}/*`.quiet()
-      console.log('✅ Temporary files cleaned')
-    } catch (err) {
-      console.error('⚠️ Failed to clean temp files:', err)
-    }
-  } else {
-    // Ensure directory exists
-    await $`mkdir -p ${tempDir}`.quiet()
-  }
-}
-
-// Clean on startup
-cleanupTempFiles().catch(console.error)
 
 const app = new Hono()
 
 // Parse CORS origins from environment variable
 const corsOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+  ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
   : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173']
 
 // Middleware
 app.use('*', logger())
 app.use('*', prettyJSON())
-app.use('*', cors({
-  origin: corsOrigins,
-  credentials: true,
-}))
+app.use(
+  '*',
+  cors({
+    origin: corsOrigins,
+    credentials: true,
+  })
+)
 
 // Health check
-app.get('/', (c) => c.json({
-  status: 'ok',
-  service: 'clipforge-api',
-  version: '0.1.0',
-  timestamp: new Date().toISOString(),
-}))
+app.get('/', (c) =>
+  c.json({
+    status: 'ok',
+    service: 'clipforge-api',
+    version: '0.1.0',
+    timestamp: new Date().toISOString(),
+  })
+)
 
 app.get('/health', (c) => c.json({ status: 'healthy' }))
 
@@ -75,10 +53,13 @@ app.route('/api/platforms', platformsRoutes)
 // Error handling
 app.onError((err, c) => {
   console.error('Server error:', err)
-  return c.json({
-    error: 'Internal server error',
-    message: err.message,
-  }, 500)
+  return c.json(
+    {
+      error: 'Internal server error',
+      message: err.message,
+    },
+    500
+  )
 })
 
 app.notFound((c) => {
@@ -95,12 +76,7 @@ async function gracefulShutdown(signal: string) {
   console.log(`\n${signal} received, shutting down gracefully...`)
 
   try {
-    // Stop accepting new jobs
-    await closeWorker()
-
-    // Close Redis connection
     await redisConnection.quit()
-
     console.log('Shutdown complete')
     process.exit(0)
   } catch (error) {
