@@ -15,17 +15,20 @@ export const env = {
   // YouTube
   YOUTUBE_CLIENT_ID: process.env.YOUTUBE_CLIENT_ID || '',
   YOUTUBE_CLIENT_SECRET: process.env.YOUTUBE_CLIENT_SECRET || '',
-  YOUTUBE_REDIRECT_URI: process.env.YOUTUBE_REDIRECT_URI || 'http://localhost:8787/api/platforms/youtube/callback',
+  YOUTUBE_REDIRECT_URI:
+    process.env.YOUTUBE_REDIRECT_URI || 'http://localhost:8787/api/platforms/youtube/callback',
 
   // Instagram
   INSTAGRAM_APP_ID: process.env.INSTAGRAM_APP_ID || '',
   INSTAGRAM_APP_SECRET: process.env.INSTAGRAM_APP_SECRET || '',
-  INSTAGRAM_REDIRECT_URI: process.env.INSTAGRAM_REDIRECT_URI || 'http://localhost:8787/api/platforms/instagram/callback',
+  INSTAGRAM_REDIRECT_URI:
+    process.env.INSTAGRAM_REDIRECT_URI || 'http://localhost:8787/api/platforms/instagram/callback',
 
   // TikTok
   TIKTOK_CLIENT_KEY: process.env.TIKTOK_CLIENT_KEY || '',
   TIKTOK_CLIENT_SECRET: process.env.TIKTOK_CLIENT_SECRET || '',
-  TIKTOK_REDIRECT_URI: process.env.TIKTOK_REDIRECT_URI || 'http://localhost:8787/api/platforms/tiktok/callback',
+  TIKTOK_REDIRECT_URI:
+    process.env.TIKTOK_REDIRECT_URI || 'http://localhost:8787/api/platforms/tiktok/callback',
 
   // OpenAI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
@@ -47,17 +50,15 @@ export const env = {
 
   // App
   JWT_SECRET: process.env.JWT_SECRET || 'dev-secret-change-in-production',
+  OAUTH_STATE_SECRET: process.env.OAUTH_STATE_SECRET || '',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
 }
 
 // Validate required env vars in production
 export function validateEnv() {
-  const required = [
-    'SUPABASE_URL',
-    'SUPABASE_SERVICE_ROLE_KEY',
-  ]
+  const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']
 
-  const missing = required.filter(key => !env[key as keyof typeof env])
+  const missing = required.filter((key) => !env[key as keyof typeof env])
 
   if (missing.length > 0 && process.env.NODE_ENV === 'production') {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`)

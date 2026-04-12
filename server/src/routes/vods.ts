@@ -1,16 +1,14 @@
-import { Hono } from 'hono'
+import { Hono, type Context, type Next } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { TwitchClient, parseTwitchDuration, getAppAccessToken } from '../lib/twitch'
 import { supabase } from '../lib/supabase'
-import '../middleware/auth' // Side-effect import for ContextVariableMap
+import { requireAuth } from '../middleware/auth'
 
 export const vodsRoutes = new Hono()
 
-import { requireAuth } from '../middleware/auth'
-
 // Middleware to setup Twitch client
-const setupTwitchClient = async (c: any, next: any) => {
+const setupTwitchClient = async (c: Context, next: Next) => {
   try {
     // Use app access token for Twitch API calls
     const appToken = await getAppAccessToken()
@@ -36,15 +34,13 @@ vodsRoutes.get('/mine', async (c) => {
       first: 20,
     })
 
-    const supabaseUserId = c.get('user')!.id
-
-    // Upsert VODs to Supabase first
-    let vodMap: Record<string, string> = {} // twitchVodId -> dbUuid
+    // Cache VODs in Supabase as a shared reference. Writes do not set user_id,
+    // so caching one user's VODs never clobbers another user's ownership.
+    let vodMap: Record<string, string> = {}
 
     if (videos.length > 0) {
-      const vodsForDb = videos.map(v => ({
+      const vodsForDb = videos.map((v) => ({
         twitch_vod_id: v.id,
-        user_id: supabaseUserId,
         title: v.title,
         channel_login: v.user_login,
         duration_seconds: parseTwitchDuration(v.duration),
@@ -56,23 +52,31 @@ vodsRoutes.get('/mine', async (c) => {
         twitch_created_at: v.created_at,
       }))
 
-      const { data: upsertedVods, error: upsertError } = await supabase
+      const { error: insertError } = await supabase
         .from('vods')
-        .upsert(vodsForDb, { onConflict: 'twitch_vod_id' })
-        .select('id, twitch_vod_id')
+        .upsert(vodsForDb, { onConflict: 'twitch_vod_id', ignoreDuplicates: true })
 
-      if (upsertError) {
-        console.error('Failed to upsert VODs to database:', upsertError)
-        // Continue even if upsert fails - we still return the data from Twitch
-      } else if (upsertedVods) {
-        vodMap = Object.fromEntries(
-          upsertedVods.map(v => [v.twitch_vod_id, v.id])
+      if (insertError) {
+        console.error('Failed to cache VODs in database:', insertError)
+      }
+
+      const { data: fetchedVods, error: selectError } = await supabase
+        .from('vods')
+        .select('id, twitch_vod_id')
+        .in(
+          'twitch_vod_id',
+          videos.map((v) => v.id)
         )
+
+      if (selectError) {
+        console.error('Failed to fetch VOD UUIDs:', selectError)
+      } else if (fetchedVods) {
+        vodMap = Object.fromEntries(fetchedVods.map((v) => [v.twitch_vod_id, v.id]))
       }
     }
 
     // Transform to our format with DB UUIDs
-    const vods = videos.map(v => ({
+    const vods = videos.map((v) => ({
       id: vodMap[v.id] || v.id, // Use DB UUID if available, fall back to Twitch ID
       title: v.title,
       duration: parseTwitchDuration(v.duration),
@@ -91,9 +95,8 @@ vodsRoutes.get('/mine', async (c) => {
         id: user.id,
         login: user.login,
         displayName: user.display_name,
-      }
+      },
     })
-
   } catch (err) {
     console.error('Failed to fetch VODs:', err)
     return c.json({ error: 'Failed to fetch VODs' }, 500)
@@ -101,88 +104,99 @@ vodsRoutes.get('/mine', async (c) => {
 })
 
 // Get VODs for any channel by login
-vodsRoutes.get('/channel/:login', zValidator('param', z.object({
-  login: z.string().min(1),
-})), async (c) => {
-  const client = c.get('twitchClient') as TwitchClient
-  const { login } = c.req.valid('param')
-
-  try {
-    const user = await client.getUserByLogin(login)
-
-    if (!user) {
-      return c.json({ error: 'Channel not found' }, 404)
-    }
-
-    const { data: videos, pagination } = await client.getVideos(user.id, {
-      type: 'archive',
-      first: 20,
+vodsRoutes.get(
+  '/channel/:login',
+  zValidator(
+    'param',
+    z.object({
+      login: z.string().min(1),
     })
+  ),
+  async (c) => {
+    const client = c.get('twitchClient') as TwitchClient
+    const { login } = c.req.valid('param')
 
-    const supabaseUserId = c.get('user')!.id
+    try {
+      const user = await client.getUserByLogin(login)
 
-    // Upsert VODs to Supabase first
-    let vodMap: Record<string, string> = {} // twitchVodId -> dbUuid
+      if (!user) {
+        return c.json({ error: 'Channel not found' }, 404)
+      }
 
-    if (videos.length > 0) {
-      const vodsForDb = videos.map(v => ({
-        twitch_vod_id: v.id,
-        user_id: supabaseUserId,
+      const { data: videos, pagination } = await client.getVideos(user.id, {
+        type: 'archive',
+        first: 20,
+      })
+
+      // Cache VODs in Supabase as a shared reference (see /mine for rationale).
+      let vodMap: Record<string, string> = {}
+
+      if (videos.length > 0) {
+        const vodsForDb = videos.map((v) => ({
+          twitch_vod_id: v.id,
+          title: v.title,
+          channel_login: v.user_login,
+          duration_seconds: parseTwitchDuration(v.duration),
+          duration_formatted: v.duration,
+          thumbnail_url: v.thumbnail_url,
+          twitch_url: v.url,
+          view_count: v.view_count,
+          stream_id: v.stream_id,
+          twitch_created_at: v.created_at,
+        }))
+
+        const { error: insertError } = await supabase
+          .from('vods')
+          .upsert(vodsForDb, { onConflict: 'twitch_vod_id', ignoreDuplicates: true })
+
+        if (insertError) {
+          console.error('Failed to cache VODs in database:', insertError)
+        }
+
+        const { data: fetchedVods, error: selectError } = await supabase
+          .from('vods')
+          .select('id, twitch_vod_id')
+          .in(
+            'twitch_vod_id',
+            videos.map((v) => v.id)
+          )
+
+        if (selectError) {
+          console.error('Failed to fetch VOD UUIDs:', selectError)
+        } else if (fetchedVods) {
+          vodMap = Object.fromEntries(fetchedVods.map((v) => [v.twitch_vod_id, v.id]))
+        }
+      }
+
+      // Transform to our format with DB UUIDs
+      const vods = videos.map((v) => ({
+        id: vodMap[v.id] || v.id, // Use DB UUID if available, fall back to Twitch ID
         title: v.title,
-        channel_login: v.user_login,
-        duration_seconds: parseTwitchDuration(v.duration),
-        duration_formatted: v.duration,
-        thumbnail_url: v.thumbnail_url,
-        twitch_url: v.url,
-        view_count: v.view_count,
-        stream_id: v.stream_id,
-        twitch_created_at: v.created_at,
+        duration: parseTwitchDuration(v.duration),
+        durationFormatted: v.duration,
+        thumbnailUrl: v.thumbnail_url.replace('%{width}', '320').replace('%{height}', '180'),
+        url: v.url,
+        viewCount: v.view_count,
+        createdAt: v.created_at,
+        streamId: v.stream_id,
       }))
 
-      const { data: upsertedVods, error: upsertError } = await supabase
-        .from('vods')
-        .upsert(vodsForDb, { onConflict: 'twitch_vod_id' })
-        .select('id, twitch_vod_id')
-
-      if (upsertError) {
-        console.error('Failed to upsert VODs to database:', upsertError)
-        // Continue even if upsert fails - we still return the data from Twitch
-      } else if (upsertedVods) {
-        vodMap = Object.fromEntries(
-          upsertedVods.map(v => [v.twitch_vod_id, v.id])
-        )
-      }
+      return c.json({
+        vods,
+        pagination,
+        channel: {
+          id: user.id,
+          login: user.login,
+          displayName: user.display_name,
+          profileImageUrl: user.profile_image_url,
+        },
+      })
+    } catch (err) {
+      console.error('Failed to fetch channel VODs:', err)
+      return c.json({ error: 'Failed to fetch VODs' }, 500)
     }
-
-    // Transform to our format with DB UUIDs
-    const vods = videos.map(v => ({
-      id: vodMap[v.id] || v.id, // Use DB UUID if available, fall back to Twitch ID
-      title: v.title,
-      duration: parseTwitchDuration(v.duration),
-      durationFormatted: v.duration,
-      thumbnailUrl: v.thumbnail_url.replace('%{width}', '320').replace('%{height}', '180'),
-      url: v.url,
-      viewCount: v.view_count,
-      createdAt: v.created_at,
-      streamId: v.stream_id,
-    }))
-
-    return c.json({
-      vods,
-      pagination,
-      channel: {
-        id: user.id,
-        login: user.login,
-        displayName: user.display_name,
-        profileImageUrl: user.profile_image_url,
-      }
-    })
-
-  } catch (err) {
-    console.error('Failed to fetch channel VODs:', err)
-    return c.json({ error: 'Failed to fetch VODs' }, 500)
   }
-})
+)
 
 // Get specific VOD details
 vodsRoutes.get('/:id', async (c) => {
@@ -196,12 +210,9 @@ vodsRoutes.get('/:id', async (c) => {
       return c.json({ error: 'VOD not found' }, 404)
     }
 
-    const supabaseUserId = c.get('user')!.id
-
-    // Upsert single VOD to Supabase
+    // Cache VOD as a shared reference; do not write user_id.
     const vodForDb = {
       twitch_vod_id: video.id,
-      user_id: supabaseUserId,
       title: video.title,
       channel_login: video.user_login,
       duration_seconds: parseTwitchDuration(video.duration),
@@ -213,18 +224,21 @@ vodsRoutes.get('/:id', async (c) => {
       twitch_created_at: video.created_at,
     }
 
-    const { data: upsertedVod, error: upsertError } = await supabase
+    const { error: insertError } = await supabase
       .from('vods')
-      .upsert([vodForDb], { onConflict: 'twitch_vod_id' })
-      .select('id')
-      .single()
+      .upsert([vodForDb], { onConflict: 'twitch_vod_id', ignoreDuplicates: true })
 
-    if (upsertError) {
-      console.error('Failed to upsert VOD to database:', upsertError)
-      // Continue even if upsert fails - we still return the data from Twitch
+    if (insertError) {
+      console.error('Failed to cache VOD in database:', insertError)
     }
 
-    const dbId = upsertedVod?.id || video.id // Use DB UUID if available
+    const { data: fetchedVod } = await supabase
+      .from('vods')
+      .select('id')
+      .eq('twitch_vod_id', video.id)
+      .maybeSingle()
+
+    const dbId = fetchedVod?.id || video.id // Use DB UUID if available
 
     return c.json({
       id: dbId,
@@ -242,9 +256,8 @@ vodsRoutes.get('/:id', async (c) => {
         id: video.user_id,
         login: video.user_login,
         displayName: video.user_name,
-      }
+      },
     })
-
   } catch (err) {
     console.error('Failed to fetch VOD:', err)
     return c.json({ error: 'Failed to fetch VOD' }, 500)
@@ -268,7 +281,6 @@ vodsRoutes.get('/channel/:login/clips', async (c) => {
     })
 
     return c.json({ clips, pagination })
-
   } catch (err) {
     console.error('Failed to fetch clips:', err)
     return c.json({ error: 'Failed to fetch clips' }, 500)
