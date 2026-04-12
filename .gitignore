@@ -46,3 +46,16 @@ coverage
 
 # Security & build artifacts
 .next/
+.claude/
+
+# Test / scratch artifacts
+test_vod.*
+*-Frag*
+*.ytdl
+.agents/
+.logs/
+server/errors.txt
+server/typescript-errors.txt
+
+# External tools (tracked accidentally as orphan gitlink)
+ralphy/
