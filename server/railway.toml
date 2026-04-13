@@ -1,0 +1,12 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Default start command is the API. Worker service overrides this in Railway
+# to run `bun run start:worker`. Both services share the same Dockerfile image.
+startCommand = "bun run start:api"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
